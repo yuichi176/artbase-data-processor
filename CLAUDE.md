@@ -13,6 +13,14 @@ This is a TypeScript-based data processor built with Hono.js, a lightweight web 
 - `pnpm start` - Run the compiled production build
 - `pnpm install` - Install dependencies
 
+## Code Quality Commands
+
+- `pnpm run lint` - Run ESLint on TypeScript files
+- `pnpm run lint:fix` - Run ESLint with auto-fix
+- `pnpm run format` - Format code with Prettier
+- `pnpm run format:check` - Check code formatting with Prettier
+- `pnpm run typecheck` - Run TypeScript type checking without emitting files
+
 ## Architecture
 
 - **Framework**: Hono.js web framework running on Node.js
@@ -28,6 +36,9 @@ This is a TypeScript-based data processor built with Hono.js, a lightweight web 
 - JSX support configured for Hono's JSX runtime
 - Strict TypeScript configuration with verbatim module syntax
 - Output directory: `./dist`
+- ESLint configured with flat config (`eslint.config.js`) using TypeScript ESLint
+- Prettier configured for code formatting
+- Lefthook configured for git hooks (pre-commit: lint, format, typecheck; pre-push: build)
 
 ## Project Structure
 

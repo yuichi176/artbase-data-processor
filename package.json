@@ -4,15 +4,28 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "prepare": "lefthook install"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.4",
     "hono": "^4.9.9"
   },
   "devDependencies": {
+    "@eslint/js": "^9.36.0",
+    "@types/eslint__js": "^9.14.0",
     "@types/node": "^20.11.17",
+    "@typescript-eslint/eslint-plugin": "^8.44.1",
+    "@typescript-eslint/parser": "^8.44.1",
+    "eslint": "^9.36.0",
+    "lefthook": "^1.13.4",
+    "prettier": "^3.6.2",
     "tsx": "^4.7.1",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.44.1"
   }
 }
