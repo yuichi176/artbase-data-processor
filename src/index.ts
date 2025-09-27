@@ -7,10 +7,11 @@ app.get('/', (c) => {
   return c.text('Hello Hono!')
 })
 
+const port = process.env.PORT !== undefined ? parseInt(process.env.PORT) : 8080
 serve(
   {
     fetch: app.fetch,
-    port: 3000,
+    port,
   },
   (info) => {
     console.log(`Server is running on http://localhost:${info.port}`)
