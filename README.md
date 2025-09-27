@@ -1,6 +1,7 @@
+# Artbase Data Processor
 ```
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 ```
