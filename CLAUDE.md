@@ -28,7 +28,7 @@ This is a TypeScript-based data processor built with Hono.js, a lightweight web 
 - **Module System**: ES modules (`"type": "module"` in package.json)
 - **Build Tool**: TypeScript compiler (tsc)
 - **Dev Tool**: tsx for development with watch mode
-- **Port**: Application runs on port 3000
+- **Port**: Application runs on port 8080 (configurable via PORT environment variable)
 
 ## Key Configuration
 
