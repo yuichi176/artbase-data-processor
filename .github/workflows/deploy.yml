@@ -51,6 +51,8 @@ jobs:
           gcloud run deploy ${{ vars.SERVICE_NAME }} \
           --image ${{ env.IMAGE }} \
           --region ${{ vars.GCP_REGION }} \
-          --service-account=${{ vars.APP_SERVICE_ACCOUNT }} \
           --port=8080 \
+          --service-account=${{ vars.APP_SERVICE_ACCOUNT }} \
+          --set-env-vars=APIFY_ACTOR_ID=aAaDnGZgNwHm4mzcl \
+          --set-secrets=APIFY_API_TOKEN=apify-api-token:1,OPENAI_API_KEY=openai-api-key:1 \
           --memory=512Mi
