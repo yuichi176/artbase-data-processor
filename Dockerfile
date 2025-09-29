@@ -1,47 +1,34 @@
-# Build stage
-FROM node:20-alpine AS builder
+FROM node:20-slim AS base
 
-# Set the working directory
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
+RUN corepack enable
+
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm
-
-# Copy package.json and pnpm-lock.yaml (if available)
+# Copy package files separately to leverage Docker cache
 COPY package.json pnpm-lock.yaml* ./
 
-# Install all dependencies (including dev dependencies for build) but skip prepare script
+# Production dependencies only stage
+FROM base AS prod-deps
+RUN pnpm install --prod --frozen-lockfile --ignore-scripts
+
+# Build stage with all dependencies
+FROM base AS build
 RUN pnpm install --frozen-lockfile --ignore-scripts
-
-# Copy source code
 COPY . .
-
-# Build the application
 RUN pnpm run build
 
-# Production stage
-FROM node:20-alpine AS production
+# Final production image
+FROM base AS production
 
-# Set the working directory
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
 
-# Copy package.json and pnpm-lock.yaml (if available)
-COPY package.json pnpm-lock.yaml* ./
-
-# Install only production dependencies and skip prepare script
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts
-
-# Copy built application from builder stage
-COPY --from=builder /app/dist ./dist
-
-# Expose the port that the app runs on
 EXPOSE 8080
-
-# Set environment variable for port
 ENV PORT=8080
 
-# Start the application
 CMD ["pnpm", "start"]
