@@ -52,4 +52,5 @@ jobs:
           --image ${{ env.IMAGE }} \
           --region ${{ vars.GCP_REGION }} \
           --service-account=${{ vars.APP_SERVICE_ACCOUNT }} \
-          --port=8080
+          --port=8080 \
+          --memory=512Mi
