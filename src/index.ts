@@ -7,6 +7,12 @@ app.get('/', (c) => {
   return c.text('Hello Hono!')
 })
 
+app.post('/process-exhibition-data', async (c) => {
+  const body = await c.req.json()
+  console.log(body)
+  return c.json({ message: 'Entry received', data: body })
+})
+
 const port = process.env.PORT !== undefined ? parseInt(process.env.PORT) : 8080
 serve(
   {
