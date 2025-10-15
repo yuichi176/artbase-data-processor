@@ -3,6 +3,7 @@ import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { ApifyClient } from 'apify-client'
 import { env } from 'hono/adapter'
+import { z } from 'zod'
 
 const app = new Hono()
 
@@ -95,13 +96,12 @@ app.post('/scrape-exhibition-data', async (c) => {
   console.log('Starting Actor: ', APIFY_ACTOR_ID)
   const run = await apifyClient.actor(APIFY_ACTOR_ID).call(input)
 
-  console.log('Results from dataset')
-  const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems()
-  items.forEach((item) => {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-expect-error
-    console.dir(item.jsonAnswer.exhibitions)
-  })
+  const { items: response } = await apifyClient.dataset(run.defaultDatasetId).listItems()
+
+  const transformed = apifyResponseSchema.parse(response)
+  console.log('Transformed data: ', transformed)
+
+  c.json(transformed, 200)
 })
 
 const port = process.env.PORT !== undefined ? parseInt(process.env.PORT) : 8080
@@ -114,3 +114,29 @@ serve(
     console.log(`Server started on ${info.address}:${info.port}`)
   },
 )
+
+const apifyResponseSchema = z
+  .array(
+    z.object({
+      jsonAnswer: z.object({
+        exhibitions: z
+          .array(
+            z.object({
+              title: z.string(),
+              venue: z.string().nullish(),
+              startDate: z.string().nullish(),
+              endDate: z.string().nullish(),
+            }),
+          )
+          .default([]),
+      }),
+    }),
+  )
+  .transform((arr) =>
+    arr.flatMap((obj) =>
+      (obj.jsonAnswer?.exhibitions ?? []).map((ex) => ({
+        ...ex,
+        status: 'pending' as const,
+      })),
+    ),
+  )
