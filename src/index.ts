@@ -3,7 +3,7 @@ import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { ApifyClient } from 'apify-client'
 import { env } from 'hono/adapter'
-import { z } from 'zod'
+import { apifyResponseSchema } from './schema.js'
 
 const app = new Hono()
 
@@ -114,29 +114,3 @@ serve(
     console.log(`Server started on ${info.address}:${info.port}`)
   },
 )
-
-const apifyResponseSchema = z
-  .array(
-    z.object({
-      jsonAnswer: z.object({
-        exhibitions: z
-          .array(
-            z.object({
-              title: z.string(),
-              venue: z.string().nullish(),
-              startDate: z.string().nullish(),
-              endDate: z.string().nullish(),
-            }),
-          )
-          .default([]),
-      }),
-    }),
-  )
-  .transform((arr) =>
-    arr.flatMap((obj) =>
-      (obj.jsonAnswer?.exhibitions ?? []).map((ex) => ({
-        ...ex,
-        status: 'pending' as const,
-      })),
-    ),
-  )
