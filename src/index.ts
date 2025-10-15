@@ -57,27 +57,9 @@ app.post('/scrape-exhibition-data', async (c) => {
                 type: 'string',
                 description: '企画展のタイトル',
               },
-              description: {
-                type: 'string',
-                description: '企画展の概要や説明文',
-              },
               venue: {
-                type: 'object',
-                description: '美術館に関する情報',
-                properties: {
-                  name: {
-                    type: 'string',
-                    description: '美術館名',
-                  },
-                  address: {
-                    type: 'string',
-                    description: '美術館の住所',
-                  },
-                  prefecture: {
-                    type: 'string',
-                    description: '都道府県名',
-                  },
-                },
+                type: 'string',
+                description: '美術館名',
               },
               startDate: {
                 type: 'string',
@@ -86,14 +68,6 @@ app.post('/scrape-exhibition-data', async (c) => {
               endDate: {
                 type: 'string',
                 description: '企画展の終了日時（ISO 8601形式）',
-              },
-              imageUrl: {
-                type: 'string',
-                description: '企画展の代表画像URL',
-              },
-              officialUrl: {
-                type: 'string',
-                description: '企画展のURL',
               },
             },
             additionalProperties: false,
@@ -124,7 +98,9 @@ app.post('/scrape-exhibition-data', async (c) => {
   console.log('Results from dataset')
   const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems()
   items.forEach((item) => {
-    console.dir(item)
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-expect-error
+    console.dir(item.jsonAnswer.exhibitions)
   })
 })
 
