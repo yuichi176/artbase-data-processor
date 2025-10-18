@@ -1,5 +1,11 @@
 # Artbase Data Processor
 
+## Request from local environment
+
+```bash
+curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" https://artbase-data-processor-514901770365.asia-northeast1.run.app/health
+```
+
 ## Firestore Authentication
 
 To authenticate your local environment with Firestore, run the following command and follow the prompts to log in with your Google account:
