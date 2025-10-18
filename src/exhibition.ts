@@ -1,18 +1,16 @@
 import { Hono } from 'hono'
-import { ApifyClient } from 'apify-client'
 import { env } from 'hono/adapter'
 import { apifyResponseSchema } from './schema.js'
+import apifyClient from './lib/apify.js'
 
 const app = new Hono()
 
 app.post('/scrape', async (c) => {
-  const { APIFY_API_TOKEN, APIFY_ACTOR_ID, OPENAI_API_KEY } = env<{
-    APIFY_API_TOKEN: string
+  const { APIFY_ACTOR_ID, OPENAI_API_KEY } = env<{
     APIFY_ACTOR_ID: string
     OPENAI_API_KEY: string
   }>(c)
 
-  const apifyClient = new ApifyClient({ token: APIFY_API_TOKEN })
   const input = {
     excludeUrlGlobs: [
       {
