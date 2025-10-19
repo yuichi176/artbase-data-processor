@@ -2,6 +2,9 @@ import { Hono } from 'hono'
 import { env } from 'hono/adapter'
 import { apifyResponseSchema } from './schema.js'
 import apifyClient from './lib/apify.js'
+import db from './lib/firestore.js'
+import { Timestamp } from '@google-cloud/firestore'
+import { TZDate } from '@date-fns/tz'
 
 const app = new Hono()
 
@@ -18,7 +21,7 @@ app.post('/scrape', async (c) => {
       },
     ],
     instructions:
-      '開催中の「企画展」、「特別展」の情報を取得して、指定されたJSONの形式で出力して下さい。',
+      '開催中の「企画展」、「特別展」の情報を取得して、指定されたJSONの形式で出力して下さい。`startDate`と`endDate`は`yyyy-mm-dd`形式で出力して下さい。',
     linkSelector: 'a[href]',
     maxCrawlingDepth: 2,
     maxPagesPerCrawl: 100,
@@ -88,7 +91,28 @@ app.post('/scrape', async (c) => {
   const transformed = apifyResponseSchema.parse(response)
   console.log('Transformed data: ', transformed)
 
-  return c.json(transformed, 200)
+  const exhibitionCollectionRef = db.collection('exhibition')
+  for (const exhibition of transformed) {
+    exhibitionCollectionRef
+      .add({
+        title: exhibition.title,
+        venue: exhibition.venue,
+        startDate: exhibition.startDate
+          ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
+          : '',
+        endDate: exhibition.endDate
+          ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
+          : '',
+        status: 'pending',
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      })
+      .then((documentReference) => {
+        console.log(`Added document with name: ${documentReference.id}`)
+      })
+  }
+
+  return c.text(`Scrape successful. Found and stored ${transformed.length} exhibitions.`, 201)
 })
 
 export default app
