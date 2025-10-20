@@ -55,11 +55,11 @@ app.post('/scrape', async (c) => {
               },
               startDate: {
                 type: 'string',
-                description: '企画展の開始日時（ISO 8601形式）',
+                description: '企画展の開始日時',
               },
               endDate: {
                 type: 'string',
-                description: '企画展の終了日時（ISO 8601形式）',
+                description: '企画展の終了日時',
               },
             },
             additionalProperties: false,
