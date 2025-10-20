@@ -8,7 +8,7 @@ export const apifyResponseSchema = z
           .array(
             z.object({
               title: z.string(),
-              venue: z.string().nullish(),
+              venue: z.string(),
               startDate: z.string().nullish(),
               endDate: z.string().nullish(),
             }),

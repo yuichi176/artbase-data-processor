@@ -5,6 +5,7 @@ import apifyClient from './lib/apify.js'
 import db from './lib/firestore.js'
 import { Timestamp } from '@google-cloud/firestore'
 import { TZDate } from '@date-fns/tz'
+import crypto from 'crypto'
 
 const app = new Hono()
 
@@ -92,27 +93,55 @@ app.post('/scrape', async (c) => {
   console.log('Transformed data: ', transformed)
 
   const exhibitionCollectionRef = db.collection('exhibition')
+
+  // Fetch existing document hashes to avoid duplicates
+  const existingDocumentHashSet = new Set<string>()
+  const existingDocumentsSnapshot = await exhibitionCollectionRef.get()
+  existingDocumentsSnapshot.forEach((doc) => {
+    existingDocumentHashSet.add(doc.id)
+  })
+
   for (const exhibition of transformed) {
-    exhibitionCollectionRef
-      .add({
-        title: exhibition.title,
-        venue: exhibition.venue,
-        startDate: exhibition.startDate
-          ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
-          : '',
-        endDate: exhibition.endDate
-          ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
-          : '',
-        status: 'pending',
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-      })
-      .then((documentReference) => {
-        console.log(`Added document with name: ${documentReference.id}`)
+    const hash = getDocumentHash(exhibition.title, exhibition.venue)
+
+    // Skip if document with the same hash already exists
+    if (existingDocumentHashSet.has(hash)) {
+      console.log(`Skipping duplicate document with hash: ${hash}`)
+      continue
+    }
+
+    await exhibitionCollectionRef
+      .doc(hash)
+      .set(
+        {
+          title: exhibition.title,
+          venue: exhibition.venue,
+          startDate: exhibition.startDate
+            ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
+            : '',
+          endDate: exhibition.endDate
+            ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
+            : '',
+          status: 'pending',
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        },
+        { merge: false },
+      )
+      .then(() => {
+        console.log(`Added document with hash: ${hash}`)
       })
   }
 
-  return c.text(`Scrape successful. Found and stored ${transformed.length} exhibitions.`, 201)
+  return c.text(`Scrape successful. Found ${transformed.length} exhibitions.`, 201)
 })
 
 export default app
+
+function getDocumentHash(title: string, venue: string): string {
+  // Remove all whitespace characters for consistent hashing
+  const cleanedTitle = title.replace(/\s+/g, '')
+  const cleanedVenue = venue.replace(/\s+/g, '')
+
+  return crypto.createHash('md5').update(`${cleanedTitle}_${cleanedVenue}`).digest('hex')
+}
