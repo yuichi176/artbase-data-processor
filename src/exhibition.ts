@@ -22,7 +22,7 @@ app.post('/scrape', async (c) => {
       },
     ],
     instructions:
-      '開催中の「企画展」、「特別展」の情報を取得して、指定されたJSONの形式で出力して下さい。`startDate`と`endDate`は`yyyy-mm-dd`形式で出力して下さい。',
+      '開催中、開催予定の「企画展」、「特別展」の情報を取得して、指定されたJSONの形式で出力して下さい。「常設展」の情報はJSONに含めないでください。`startDate`と`endDate`は`yyyy-mm-dd`形式で出力して下さい。',
     linkSelector: 'a[href]',
     maxCrawlingDepth: 2,
     maxPagesPerCrawl: 100,
