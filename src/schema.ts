@@ -11,6 +11,8 @@ export const apifyResponseSchema = z
               venue: z.string(),
               startDate: z.string().nullish(),
               endDate: z.string().nullish(),
+              officialUrl: z.string().nullish(),
+              imageUrl: z.string().nullish(),
             }),
           )
           .default([]),

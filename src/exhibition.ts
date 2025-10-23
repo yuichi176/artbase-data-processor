@@ -22,7 +22,7 @@ app.post('/scrape', async (c) => {
       },
     ],
     instructions:
-      '開催中、開催予定の「企画展」、「特別展」の情報を取得して、指定されたJSONの形式で出力して下さい。「常設展」の情報はJSONに含めないでください。`startDate`と`endDate`は`yyyy-mm-dd`形式で出力して下さい。',
+      '開催中、開催予定の「企画展」、「特別展」の情報を取得して、指定されたJSONの形式で出力して下さい。「常設展」の情報はJSONに含めないでください。`startDate`と`endDate`は`yyyy-mm-dd`形式で出力して下さい。`imageUrl`はhttps始まりの展覧会の代表画像のURLを出力して下さい。情報が見つからない場合は空文字列を出力して下さい。',
     linkSelector: 'a[href]',
     maxCrawlingDepth: 2,
     maxPagesPerCrawl: 100,
@@ -41,25 +41,33 @@ app.post('/scrape', async (c) => {
       properties: {
         exhibitions: {
           type: 'array',
-          description: '展示会情報の一覧',
+          description: '展覧会情報の一覧',
           items: {
             type: 'object',
             properties: {
               title: {
                 type: 'string',
-                description: '企画展のタイトル',
+                description: '展覧会のタイトル',
               },
               venue: {
                 type: 'string',
-                description: '美術館名',
+                description: '会場名',
               },
               startDate: {
                 type: 'string',
-                description: '企画展の開始日時',
+                description: '展覧会の開始日時',
               },
               endDate: {
                 type: 'string',
-                description: '企画展の終了日時',
+                description: '展覧会の終了日時',
+              },
+              officialUrl: {
+                type: 'string',
+                description: '展覧会の公式URL',
+              },
+              imageUrl: {
+                type: 'string',
+                description: '展覧会の代表画像URL',
               },
             },
             additionalProperties: false,
@@ -122,6 +130,8 @@ app.post('/scrape', async (c) => {
           endDate: exhibition.endDate
             ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
             : '',
+          officialUrl: exhibition.officialUrl,
+          imageUrl: exhibition.imageUrl,
           status: 'pending',
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
