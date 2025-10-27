@@ -3,20 +3,22 @@ import { z } from 'zod'
 export const apifyResponseSchema = z
   .array(
     z.object({
-      jsonAnswer: z.object({
-        exhibitions: z
-          .array(
-            z.object({
-              title: z.string(),
-              venue: z.string(),
-              startDate: z.string().nullish(),
-              endDate: z.string().nullish(),
-              officialUrl: z.string().nullish(),
-              imageUrl: z.string().nullish(),
-            }),
-          )
-          .default([]),
-      }),
+      jsonAnswer: z
+        .object({
+          exhibitions: z
+            .array(
+              z.object({
+                title: z.string(),
+                venue: z.string(),
+                startDate: z.string().nullish(),
+                endDate: z.string().nullish(),
+                officialUrl: z.string().nullish(),
+                imageUrl: z.string().nullish(),
+              }),
+            )
+            .default([]),
+        })
+        .optional(),
     }),
   )
   .transform((arr) =>
@@ -27,3 +29,14 @@ export const apifyResponseSchema = z
       })),
     ),
   )
+
+export const museumSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  address: z.string(),
+  access: z.string(),
+  openingInformation: z.string(),
+  officialUrl: z.string(),
+  scrapeUrl: z.string(),
+})
+export type Museum = z.infer<typeof museumSchema>

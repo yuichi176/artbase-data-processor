@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { env } from 'hono/adapter'
-import { apifyResponseSchema } from './schema.js'
+import { apifyResponseSchema, type Museum } from './schema.js'
 import apifyClient from './lib/apify.js'
 import db from './lib/firestore.js'
 import { Timestamp } from '@google-cloud/firestore'
@@ -15,6 +15,17 @@ app.post('/scrape', async (c) => {
     OPENAI_API_KEY: string
   }>(c)
 
+  // Fetch museum scrape URLs from Firestore
+  const museumCollectionRef = db.collection('museum')
+  const museumSnapshot = await museumCollectionRef.get()
+  const startUrls = museumSnapshot.docs.map((doc) => {
+    const data = doc.data() as Museum
+    return {
+      url: data.scrapeUrl,
+      method: 'GET' as const,
+    }
+  })
+
   const input = {
     excludeUrlGlobs: [
       {
@@ -22,7 +33,7 @@ app.post('/scrape', async (c) => {
       },
     ],
     instructions:
-      '開催中、開催予定の「企画展」、「特別展」の情報を取得して、指定されたJSONの形式で出力して下さい。「常設展」の情報はJSONに含めないでください。`startDate`と`endDate`は`yyyy-mm-dd`形式で出力して下さい。`imageUrl`はhttps始まりの展覧会の代表画像のURLを出力して下さい。情報が見つからない場合は空文字列を出力して下さい。',
+      '開催中、開催予定の「展覧会」の情報を取得して、指定されたJSONの形式で出力して下さい。「常設展」の情報はJSONに含めないでください。`startDate`と`endDate`は`yyyy-mm-dd`形式で出力して下さい。`officialUrl`と`imageUrl`は`https`始まりの代表画像のURLを出力して下さい。情報が見つからない場合は空文字列を出力して下さい。',
     linkSelector: 'a[href]',
     maxCrawlingDepth: 2,
     maxPagesPerCrawl: 100,
@@ -51,7 +62,7 @@ app.post('/scrape', async (c) => {
               },
               venue: {
                 type: 'string',
-                description: '会場名',
+                description: '美術館名',
               },
               startDate: {
                 type: 'string',
@@ -75,25 +86,14 @@ app.post('/scrape', async (c) => {
         },
       },
     },
-    startUrls: [
-      {
-        url: 'https://www.nmwa.go.jp/jp/exhibitions/current.html',
-        method: 'GET',
-      },
-      {
-        url: 'https://www.nact.jp/exhibition_special/',
-        method: 'GET',
-      },
-      {
-        url: 'https://www.tobikan.jp/exhibition/index.html',
-        method: 'GET',
-      },
-    ],
+    startUrls,
     useStructureOutput: true,
   }
 
   console.log('Starting Actor: ', APIFY_ACTOR_ID)
-  const run = await apifyClient.actor(APIFY_ACTOR_ID).call(input)
+  const run = await apifyClient.actor(APIFY_ACTOR_ID).call(input, {
+    timeout: 300,
+  })
 
   const { items: response } = await apifyClient.dataset(run.defaultDatasetId).listItems()
 
