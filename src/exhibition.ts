@@ -5,7 +5,7 @@ import apifyClient from './lib/apify.js'
 import db from './lib/firestore.js'
 import { Timestamp } from '@google-cloud/firestore'
 import { TZDate } from '@date-fns/tz'
-import crypto from 'crypto'
+import { getDocumentHash } from './utils/hash.js'
 
 const app = new Hono()
 
@@ -147,11 +147,3 @@ app.post('/scrape', async (c) => {
 })
 
 export default app
-
-function getDocumentHash(title: string, venue: string): string {
-  // Remove all whitespace characters for consistent hashing
-  const cleanedTitle = title.replace(/\s+/g, '')
-  const cleanedVenue = venue.replace(/\s+/g, '')
-
-  return crypto.createHash('md5').update(`${cleanedTitle}_${cleanedVenue}`).digest('hex')
-}
