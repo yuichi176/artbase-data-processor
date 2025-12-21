@@ -32,7 +32,7 @@ app.post('/scrape', async (c) => {
       },
     ],
     instructions:
-      '開催中、開催予定の「展覧会」の情報を取得して、指定されたJSONの形式で出力して下さい。「常設展」の情報はJSONに含めないでください。`startDate`と`endDate`は`yyyy-mm-dd`形式で出力して下さい。`officialUrl`と`imageUrl`は`https`始まりの代表画像のURLを出力して下さい。情報が見つからない場合は空文字列を出力して下さい。',
+      '開催中、開催予定の「展覧会」の情報を取得して、指定されたJSONの形式で出力して下さい。「常設展」の情報はJSONに含めないでください。',
     linkSelector: 'a[href]',
     maxCrawlingDepth: 2,
     maxPagesPerCrawl: 100,
@@ -61,7 +61,7 @@ app.post('/scrape', async (c) => {
               },
               venue: {
                 type: 'string',
-                description: '美術館名',
+                description: '会場名',
               },
               startDate: {
                 type: 'string',
@@ -85,6 +85,8 @@ app.post('/scrape', async (c) => {
         },
       },
     },
+    schemaDescription:
+      '`title`の先頭に「特別展」「企画展」などの余計な単語を付け加えないでください。`startDate`と`endDate`は`yyyy-mm-dd`形式で出力して下さい。`officialUrl`と`imageUrl`は`https`始まりの代表画像のURLを出力して下さい。`venue`は美術館、博物館の名称を出力して下さい。例えば、`venue`には「本館展示室」「企画展示室」ではなく「国立西洋美術館」を出力して下さい。情報が見つからない場合は空文字列を出力して下さい。',
     startUrls,
     useStructureOutput: true,
   }
