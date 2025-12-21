@@ -5,7 +5,7 @@ import apifyClient from './lib/apify.js'
 import db from './lib/firestore.js'
 import { Timestamp } from '@google-cloud/firestore'
 import { TZDate } from '@date-fns/tz'
-import { getDocumentHash } from './utils/hash.js'
+import { getDocumentHash, normalize } from './utils/hash.js'
 
 const app = new Hono()
 
@@ -16,8 +16,7 @@ app.post('/scrape', async (c) => {
   }>(c)
 
   // Fetch museum scrape URLs from Firestore
-  const museumCollectionRef = db.collection('museum')
-  const museumSnapshot = await museumCollectionRef.get()
+  const museumSnapshot = await db.collection('museum').get()
   const startUrls = museumSnapshot.docs.map((doc) => {
     const data = doc.data() as Museum
     return {
@@ -109,8 +108,23 @@ app.post('/scrape', async (c) => {
     existingDocumentHashSet.add(doc.id)
   })
 
+  // Create a map of venue names and their aliases for venue normalization
+  const venueAliasMap = new Map<string, string>()
+  for (const doc of museumSnapshot.docs) {
+    const museum = doc.data() as Museum
+
+    venueAliasMap.set(museum.name, museum.name)
+    if (!museum.aliases) continue
+    for (const alias of museum.aliases) {
+      venueAliasMap.set(normalize(alias), museum.name)
+    }
+  }
+
   for (const exhibition of transformed) {
-    const hash = getDocumentHash(exhibition.title, exhibition.venue)
+    // Normalize venue name using aliases
+    const canonicalVenueName = venueAliasMap.get(normalize(exhibition.venue)) ?? exhibition.venue
+
+    const hash = getDocumentHash(exhibition.title, canonicalVenueName)
 
     // Skip if document with the same hash already exists
     if (existingDocumentHashSet.has(hash)) {
@@ -123,7 +137,7 @@ app.post('/scrape', async (c) => {
       .set(
         {
           title: exhibition.title,
-          venue: exhibition.venue,
+          venue: canonicalVenueName,
           startDate: exhibition.startDate
             ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
             : '',
