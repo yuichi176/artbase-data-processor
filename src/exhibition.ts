@@ -16,7 +16,7 @@ app.post('/scrape', async (c) => {
   }>(c)
 
   // Fetch museum scrape URLs from Firestore
-  const museumSnapshot = await db.collection('museum').get()
+  const museumSnapshot = await db.collection('museum').where('scrapeEnabled', '==', true).get()
   const startUrls = museumSnapshot.docs.map((doc) => {
     const data = doc.data() as Museum
     return {

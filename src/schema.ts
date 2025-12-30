@@ -39,5 +39,6 @@ export const museumSchema = z.object({
   officialUrl: z.string(),
   scrapeUrl: z.string(),
   aliases: z.array(z.string()).optional(),
+  scrapeEnabled: z.boolean(),
 })
 export type Museum = z.infer<typeof museumSchema>
