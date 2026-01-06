@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { env } from 'hono/adapter'
-import { apifyResponseSchema, type Museum } from './schema.js'
+import { apifyResponseSchema, apifyResponseWithoutUrlSchema, type Museum } from './schema.js'
 import apifyClient from './lib/apify.js'
 import db from './lib/firestore.js'
 import { Timestamp } from '@google-cloud/firestore'
@@ -149,6 +149,7 @@ app.post('/scrape', async (c) => {
           officialUrl: exhibition.officialUrl,
           imageUrl: exhibition.imageUrl,
           status: 'pending',
+          origin: 'scrape',
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
         },
@@ -160,6 +161,155 @@ app.post('/scrape', async (c) => {
   }
 
   return c.text(`Scrape successful. Found ${transformed.length} exhibitions.`, 201)
+})
+
+app.post('/scrape-feed', async (c) => {
+  const { APIFY_ACTOR_ID, OPENAI_API_KEY } = env<{
+    APIFY_ACTOR_ID: string
+    OPENAI_API_KEY: string
+  }>(c)
+
+  const museumSnapshot = await db.collection('museum').get()
+  const museums = museumSnapshot.docs.map((doc) => {
+    const data = doc.data() as Museum
+    return data.name
+  })
+
+  const input = {
+    excludeUrlGlobs: [
+      {
+        glob: '',
+      },
+    ],
+    instructions: '「展覧会」情報を取得して、指定されたJSONの形式で出力して下さい。',
+    linkSelector: 'a[href]',
+    maxCrawlingDepth: 1,
+    maxPagesPerCrawl: 100,
+    model: 'gpt-4o-mini',
+    openaiApiKey: OPENAI_API_KEY,
+    proxyConfiguration: {
+      useApifyProxy: true,
+      apifyProxyGroups: [],
+    },
+    removeElementsCssSelector: 'script, style, noscript, path, svg, xlink',
+    removeLinkUrls: false,
+    saveSnapshots: true,
+    schema: {
+      title: 'ExhibitionListSchema',
+      type: 'object',
+      properties: {
+        exhibitions: {
+          type: 'array',
+          description: '展示会情報の一覧',
+          items: {
+            type: 'object',
+            properties: {
+              title: {
+                type: 'string',
+                description: '展覧会のタイトル',
+              },
+              venue: {
+                type: 'string',
+                description: '会場名',
+              },
+              startDate: {
+                type: 'string',
+                description: '展覧会の開始日時',
+              },
+              endDate: {
+                type: 'string',
+                description: '展覧会の終了日時',
+              },
+            },
+            additionalProperties: false,
+          },
+        },
+      },
+    },
+    schemaDescription:
+      '`title` の先頭に「特別展」「企画展」などの余計な単語を付け加えないでください。`startDate`と`endDate`は`yyyy-mm-dd`形式で出力して下さい。`venue`は美術館、博物館の名称を出力して下さい。例えば、`venue`には「本館展示室」「企画展示室」ではなく「国立西洋美術館」を出力して下さい。情報が見つからない場合は空文字列を出力して下さい。',
+    startUrls: [
+      {
+        url: 'https://www.tokyoartbeat.com/events/regionId/3t69ZtVfJeKUQ2UM0DXnJM/orderBy/latest',
+        method: 'GET',
+      },
+    ],
+    useStructureOutput: true,
+  }
+
+  console.log('Starting Actor: ', APIFY_ACTOR_ID)
+  const run = await apifyClient.actor(APIFY_ACTOR_ID).call(input, {
+    timeout: 300,
+  })
+
+  const { items: response } = await apifyClient.dataset(run.defaultDatasetId).listItems()
+
+  const transformed = apifyResponseWithoutUrlSchema.parse(response)
+  console.log('Transformed data: ', transformed)
+
+  // Filter exhibitions to include only those from known museums
+  const filteredExhibitions = transformed.filter((exhibition) => museums.includes(exhibition.venue))
+
+  const exhibitionCollectionRef = db.collection('exhibition')
+
+  // Fetch existing document hashes to avoid duplicates
+  const existingDocumentHashSet = new Set<string>()
+  const existingDocumentsSnapshot = await exhibitionCollectionRef.get()
+  existingDocumentsSnapshot.forEach((doc) => {
+    existingDocumentHashSet.add(doc.id)
+  })
+
+  // Create a map of venue names and their aliases for venue normalization
+  const venueAliasMap = new Map<string, string>()
+  for (const doc of museumSnapshot.docs) {
+    const museum = doc.data() as Museum
+
+    venueAliasMap.set(museum.name, museum.name)
+    if (!museum.aliases) continue
+    for (const alias of museum.aliases) {
+      venueAliasMap.set(normalize(alias), museum.name)
+    }
+  }
+
+  for (const exhibition of filteredExhibitions) {
+    // Normalize venue name using aliases
+    const canonicalVenueName = venueAliasMap.get(normalize(exhibition.venue)) ?? exhibition.venue
+
+    const hash = getDocumentHash(exhibition.title, canonicalVenueName)
+
+    // Skip if document with the same hash already exists
+    if (existingDocumentHashSet.has(hash)) {
+      console.log(`Skipping duplicate document with hash: ${hash}`)
+      continue
+    }
+
+    await exhibitionCollectionRef
+      .doc(hash)
+      .set(
+        {
+          title: exhibition.title,
+          venue: canonicalVenueName,
+          startDate: exhibition.startDate
+            ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
+            : '',
+          endDate: exhibition.endDate
+            ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
+            : '',
+          officialUrl: undefined,
+          imageUrl: undefined,
+          status: 'pending',
+          origin: 'scrape-feed',
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        },
+        { merge: false },
+      )
+      .then(() => {
+        console.log(`Added document with hash: ${hash}`)
+      })
+  }
+
+  return c.text(`Scrape successful. Found ${filteredExhibitions.length} exhibitions.`, 201)
 })
 
 export default app
