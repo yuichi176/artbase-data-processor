@@ -97,9 +97,7 @@ app.post('/scrape', async (c) => {
   })
 
   const { items: response } = await apifyClient.dataset(run.defaultDatasetId).listItems()
-
   const transformed = apifyResponseSchema.parse(response)
-  console.log('Transformed data: ', transformed)
 
   const exhibitionCollectionRef = db.collection('exhibition')
 
