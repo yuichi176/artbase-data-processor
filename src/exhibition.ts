@@ -6,6 +6,7 @@ import db from './lib/firestore.js'
 import { Timestamp } from '@google-cloud/firestore'
 import { TZDate } from '@date-fns/tz'
 import { getDocumentHash, normalize } from './utils/hash.js'
+import { areDatesEqual } from './utils/date.js'
 
 const app = new Hono()
 
@@ -101,11 +102,21 @@ app.post('/scrape', async (c) => {
 
   const exhibitionCollectionRef = db.collection('exhibition')
 
-  // Fetch existing document hashes to avoid duplicates
-  const existingDocumentHashSet = new Set<string>()
+  // Fetch existing documents to check for duplicates and date changes
+  const existingExhibitionsMap = new Map<
+    string,
+    {
+      startDate: Timestamp | string
+      endDate: Timestamp | string
+    }
+  >()
   const existingDocumentsSnapshot = await exhibitionCollectionRef.get()
   existingDocumentsSnapshot.forEach((doc) => {
-    existingDocumentHashSet.add(doc.id)
+    const data = doc.data()
+    existingExhibitionsMap.set(doc.id, {
+      startDate: data.startDate,
+      endDate: data.endDate,
+    })
   })
 
   // Create a map of venue names and their aliases for venue normalization
@@ -126,15 +137,35 @@ app.post('/scrape', async (c) => {
 
     const hash = getDocumentHash(exhibition.title, canonicalVenueName)
 
-    // Skip if document with the same hash already exists
-    if (existingDocumentHashSet.has(hash)) {
-      console.log(`Skipping duplicate document with hash: ${hash}`)
-      continue
+    // Check if document with the same hash already exists
+    const existingExhibition = existingExhibitionsMap.get(hash)
+
+    if (existingExhibition) {
+      const startDateChanged = !areDatesEqual(existingExhibition.startDate, exhibition.startDate)
+      const endDateChanged = !areDatesEqual(existingExhibition.endDate, exhibition.endDate)
+
+      if (!startDateChanged && !endDateChanged) {
+        console.log(`Skipping duplicate document with hash: ${hash}`)
+        continue
+      }
     }
 
-    await exhibitionCollectionRef
-      .doc(hash)
-      .set(
+    if (existingExhibition) {
+      // Update existing document with new dates
+      await exhibitionCollectionRef.doc(hash).update({
+        startDate: exhibition.startDate
+          ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
+          : '',
+        endDate: exhibition.endDate
+          ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
+          : '',
+        hasDateChanged: true,
+        updatedAt: Timestamp.now(),
+      })
+      console.log(`Updated document with hash: ${hash} (dates changed)`)
+    } else {
+      // Create new document
+      await exhibitionCollectionRef.doc(hash).set(
         {
           title: exhibition.title,
           venue: canonicalVenueName,
@@ -149,14 +180,14 @@ app.post('/scrape', async (c) => {
           status: 'pending',
           origin: 'scrape',
           isExcluded: false,
+          hasDateChanged: false,
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
         },
         { merge: false },
       )
-      .then(() => {
-        console.log(`Added document with hash: ${hash}`)
-      })
+      console.log(`Added document with hash: ${hash}`)
+    }
   }
 
   return c.text(`Scrape successful. Found ${transformed.length} exhibitions.`, 201)
@@ -251,11 +282,21 @@ app.post('/scrape-feed', async (c) => {
 
   const exhibitionCollectionRef = db.collection('exhibition')
 
-  // Fetch existing document hashes to avoid duplicates
-  const existingDocumentHashSet = new Set<string>()
+  // Fetch existing documents to check for duplicates and date changes
+  const existingExhibitionsMap = new Map<
+    string,
+    {
+      startDate: Timestamp | string
+      endDate: Timestamp | string
+    }
+  >()
   const existingDocumentsSnapshot = await exhibitionCollectionRef.get()
   existingDocumentsSnapshot.forEach((doc) => {
-    existingDocumentHashSet.add(doc.id)
+    const data = doc.data()
+    existingExhibitionsMap.set(doc.id, {
+      startDate: data.startDate,
+      endDate: data.endDate,
+    })
   })
 
   // Create a map of venue names and their aliases for venue normalization
@@ -276,15 +317,36 @@ app.post('/scrape-feed', async (c) => {
 
     const hash = getDocumentHash(exhibition.title, canonicalVenueName)
 
-    // Skip if document with the same hash already exists
-    if (existingDocumentHashSet.has(hash)) {
-      console.log(`Skipping duplicate document with hash: ${hash}`)
-      continue
+    // Check if document with the same hash already exists
+    const existingExhibition = existingExhibitionsMap.get(hash)
+    if (existingExhibition) {
+      const startDateChanged = !areDatesEqual(existingExhibition.startDate, exhibition.startDate)
+      const endDateChanged = !areDatesEqual(existingExhibition.endDate, exhibition.endDate)
+
+      if (!startDateChanged && !endDateChanged) {
+        console.log(`Skipping duplicate document with hash: ${hash}`)
+        continue
+      }
+
+      // Dates have changed, will update document below
     }
 
-    await exhibitionCollectionRef
-      .doc(hash)
-      .set(
+    if (existingExhibition) {
+      // Update existing document with new dates
+      await exhibitionCollectionRef.doc(hash).update({
+        startDate: exhibition.startDate
+          ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
+          : '',
+        endDate: exhibition.endDate
+          ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
+          : '',
+        hasDateChanged: true,
+        updatedAt: Timestamp.now(),
+      })
+      console.log(`Updated document with hash: ${hash} (dates changed)`)
+    } else {
+      // Create new document
+      await exhibitionCollectionRef.doc(hash).set(
         {
           title: exhibition.title,
           venue: canonicalVenueName,
@@ -299,14 +361,14 @@ app.post('/scrape-feed', async (c) => {
           status: 'pending',
           origin: 'scrape-feed',
           isExcluded: false,
+          hasDateChanged: false,
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
         },
         { merge: false },
       )
-      .then(() => {
-        console.log(`Added document with hash: ${hash}`)
-      })
+      console.log(`Added document with hash: ${hash}`)
+    }
   }
 
   return c.text(`Scrape successful. Found ${filteredExhibitions.length} exhibitions.`, 201)
