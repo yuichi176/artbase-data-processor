@@ -1,5 +1,5 @@
 {
-  "name": "artbase-data-processor",
+  "name": "artlyst-data-processor",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
