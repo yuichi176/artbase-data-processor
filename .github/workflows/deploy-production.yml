@@ -54,5 +54,4 @@ jobs:
           --service-account=${{ vars.APP_SERVICE_ACCOUNT_PROD }} \
           --set-env-vars=APIFY_ACTOR_ID=aAaDnGZgNwHm4mzcl \
           --set-secrets=APIFY_API_TOKEN=apify-api-token:1,OPENAI_API_KEY=openai-api-key:1 \
-          --memory=512Mi \
-          --tag=${{ github.event.release.tag_name }}
+          --memory=512Mi
