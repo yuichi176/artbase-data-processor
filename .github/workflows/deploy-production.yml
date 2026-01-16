@@ -1,22 +1,21 @@
-name: Deploy to Dev
+name: Deploy to Production
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
+  release:
+    types: [published]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: production-deployment
+  cancel-in-progress: false
 
 env:
-  WORKLOAD_IDENTITY_PROVIDER: projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ vars.WORKLOAD_IDENTITY_POOL_ID }}/providers/${{ vars.WORKLOAD_IDENTITY_PROVIDER_ID }}
-  IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REPO }}/${{ vars.SERVICE_NAME }}:${{ github.sha }}
+  WORKLOAD_IDENTITY_PROVIDER: projects/${{ vars.GCP_PROJECT_NUMBER_PROD }}/locations/global/workloadIdentityPools/${{ vars.WORKLOAD_IDENTITY_POOL_ID }}/providers/${{ vars.WORKLOAD_IDENTITY_PROVIDER_ID }}
+  IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID_PROD }}/${{ vars.ARTIFACT_REPO }}/${{ vars.SERVICE_NAME }}:${{ github.event.release.tag_name }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -28,7 +27,7 @@ jobs:
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GIT_SERVICE_ACCOUNT }}
+          service_account: ${{ vars.GIT_SERVICE_ACCOUNT_PROD }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -52,7 +51,8 @@ jobs:
           --image ${{ env.IMAGE }} \
           --region ${{ vars.GCP_REGION }} \
           --port=8080 \
-          --service-account=${{ vars.APP_SERVICE_ACCOUNT }} \
+          --service-account=${{ vars.APP_SERVICE_ACCOUNT_PROD }} \
           --set-env-vars=APIFY_ACTOR_ID=aAaDnGZgNwHm4mzcl \
           --set-secrets=APIFY_API_TOKEN=apify-api-token:1,OPENAI_API_KEY=openai-api-key:1 \
-          --memory=512Mi
+          --memory=512Mi \
+          --tag=${{ github.event.release.tag_name }}
