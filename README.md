@@ -3,7 +3,7 @@
 ## Request from local environment
 
 ```bash
-curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" https://artbase-data-processor-514901770365.asia-northeast1.run.app/health
+curl -X POST -H "Authorization: Bearer $(gcloud auth print-identity-token)" https://artlyst-data-processor-514901770365.asia-northeast1.run.app/exhibition/scrape
 ```
 
 ## Firestore Authentication
