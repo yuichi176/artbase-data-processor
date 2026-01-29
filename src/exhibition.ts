@@ -5,7 +5,7 @@ import apifyClient from './lib/apify.js'
 import db from './lib/firestore.js'
 import { Timestamp } from '@google-cloud/firestore'
 import { TZDate } from '@date-fns/tz'
-import { getDocumentHash, normalize } from './utils/hash.js'
+import { getExhibitionDocumentId } from './utils/hash.js'
 import { areDatesEqual } from './utils/date.js'
 
 const app = new Hono()
@@ -119,40 +119,53 @@ app.post('/scrape', async (c) => {
     })
   })
 
-  // Create a map of venue names and their aliases for venue normalization
-  const venueAliasMap = new Map<string, string>()
+  const museumAliasToMuseumNameMap = new Map<string, string>()
+  const museumNameToMuseumIdMap = new Map<string, string>()
   for (const doc of museumSnapshot.docs) {
     const museum = doc.data() as Museum
 
-    venueAliasMap.set(museum.name, museum.name)
+    museumAliasToMuseumNameMap.set(museum.name, museum.name)
+    museumNameToMuseumIdMap.set(museum.name, doc.id)
     if (!museum.aliases) continue
     for (const alias of museum.aliases) {
-      venueAliasMap.set(normalize(alias), museum.name)
+      museumAliasToMuseumNameMap.set(alias, museum.name)
+      museumNameToMuseumIdMap.set(alias, doc.id)
     }
   }
 
   for (const exhibition of transformed) {
-    // Normalize venue name using aliases
-    const canonicalVenueName = venueAliasMap.get(normalize(exhibition.venue)) ?? exhibition.venue
+    const canonicalVenueName = museumAliasToMuseumNameMap.get(exhibition.venue)
 
-    const hash = getDocumentHash(exhibition.title, canonicalVenueName)
+    if (canonicalVenueName === undefined) {
+      // TODO: Handle this case better
+      console.error(`Venue not found for exhibition: ${exhibition.venue} - ${exhibition.title}`)
+      continue
+    }
+
+    const museumId = museumNameToMuseumIdMap.get(canonicalVenueName)
+
+    if (museumId === undefined) {
+      // TODO: Handle this case better
+      console.error(`Museum ID not found for venue: ${canonicalVenueName}`)
+      continue
+    }
+
+    const newDocumentId = getExhibitionDocumentId(museumId, exhibition.title)
 
     // Check if document with the same hash already exists
-    const existingExhibition = existingExhibitionsMap.get(hash)
+    const existingExhibition = existingExhibitionsMap.get(newDocumentId)
 
     if (existingExhibition) {
       const startDateChanged = !areDatesEqual(existingExhibition.startDate, exhibition.startDate)
       const endDateChanged = !areDatesEqual(existingExhibition.endDate, exhibition.endDate)
 
       if (!startDateChanged && !endDateChanged) {
-        console.log(`Skipping duplicate document with hash: ${hash}`)
+        console.log(`Skipping duplicate document with id: ${newDocumentId}`)
         continue
       }
-    }
 
-    if (existingExhibition) {
       // Update existing document with new dates
-      await exhibitionCollectionRef.doc(hash).update({
+      await exhibitionCollectionRef.doc(newDocumentId).update({
         startDate: exhibition.startDate
           ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
           : '',
@@ -162,13 +175,13 @@ app.post('/scrape', async (c) => {
         hasDateChanged: true,
         updatedAt: Timestamp.now(),
       })
-      console.log(`Updated document with hash: ${hash} (dates changed)`)
+      console.log(`Updated document with id: ${newDocumentId} (dates changed)`)
     } else {
-      // Create new document
-      await exhibitionCollectionRef.doc(hash).set(
+      await exhibitionCollectionRef.doc(newDocumentId).set(
         {
           title: exhibition.title,
           venue: canonicalVenueName,
+          museumId: museumId,
           startDate: exhibition.startDate
             ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
             : '',
@@ -176,7 +189,6 @@ app.post('/scrape', async (c) => {
             ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
             : '',
           officialUrl: exhibition.officialUrl,
-          imageUrl: exhibition.imageUrl,
           status: 'pending',
           origin: 'scrape',
           isExcluded: false,
@@ -186,7 +198,7 @@ app.post('/scrape', async (c) => {
         },
         { merge: false },
       )
-      console.log(`Added document with hash: ${hash}`)
+      console.log(`Added document with id: ${newDocumentId}`)
     }
   }
 
@@ -200,10 +212,6 @@ app.post('/scrape-feed', async (c) => {
   }>(c)
 
   const museumSnapshot = await db.collection('museum').get()
-  const museums = museumSnapshot.docs.map((doc) => {
-    const data = doc.data() as Museum
-    return data.name
-  })
 
   const input = {
     excludeUrlGlobs: [
@@ -277,9 +285,6 @@ app.post('/scrape-feed', async (c) => {
   const transformed = apifyResponseWithoutUrlSchema.parse(response)
   console.log('Transformed data: ', transformed)
 
-  // Filter exhibitions to include only those from known museums
-  const filteredExhibitions = transformed.filter((exhibition) => museums.includes(exhibition.venue))
-
   const exhibitionCollectionRef = db.collection('exhibition')
 
   // Fetch existing documents to check for duplicates and date changes
@@ -299,41 +304,54 @@ app.post('/scrape-feed', async (c) => {
     })
   })
 
-  // Create a map of venue names and their aliases for venue normalization
-  const venueAliasMap = new Map<string, string>()
+  const museumAliasToMuseumNameMap = new Map<string, string>()
+  const museumNameToMuseumIdMap = new Map<string, string>()
   for (const doc of museumSnapshot.docs) {
     const museum = doc.data() as Museum
 
-    venueAliasMap.set(museum.name, museum.name)
+    museumAliasToMuseumNameMap.set(museum.name, museum.name)
+    museumNameToMuseumIdMap.set(museum.name, doc.id)
     if (!museum.aliases) continue
     for (const alias of museum.aliases) {
-      venueAliasMap.set(normalize(alias), museum.name)
+      museumAliasToMuseumNameMap.set(alias, museum.name)
+      museumNameToMuseumIdMap.set(alias, doc.id)
     }
   }
 
-  for (const exhibition of filteredExhibitions) {
-    // Normalize venue name using aliases
-    const canonicalVenueName = venueAliasMap.get(normalize(exhibition.venue)) ?? exhibition.venue
+  for (const exhibition of transformed) {
+    const canonicalVenueName = museumAliasToMuseumNameMap.get(exhibition.venue)
 
-    const hash = getDocumentHash(exhibition.title, canonicalVenueName)
+    if (canonicalVenueName === undefined) {
+      console.log(
+        `Venue is not registered for exhibition: ${exhibition.venue} - ${exhibition.title}`,
+      )
+      continue
+    }
+
+    const museumId = museumNameToMuseumIdMap.get(canonicalVenueName)
+
+    if (museumId === undefined) {
+      // TODO: Handle this case better
+      console.error(`Museum ID not found for venue: ${canonicalVenueName}`)
+      continue
+    }
+
+    const newDocumentId = getExhibitionDocumentId(museumId, exhibition.title)
 
     // Check if document with the same hash already exists
-    const existingExhibition = existingExhibitionsMap.get(hash)
+    const existingExhibition = existingExhibitionsMap.get(newDocumentId)
+
     if (existingExhibition) {
       const startDateChanged = !areDatesEqual(existingExhibition.startDate, exhibition.startDate)
       const endDateChanged = !areDatesEqual(existingExhibition.endDate, exhibition.endDate)
 
       if (!startDateChanged && !endDateChanged) {
-        console.log(`Skipping duplicate document with hash: ${hash}`)
+        console.log(`Skipping duplicate document with id: ${newDocumentId}`)
         continue
       }
 
-      // Dates have changed, will update document below
-    }
-
-    if (existingExhibition) {
       // Update existing document with new dates
-      await exhibitionCollectionRef.doc(hash).update({
+      await exhibitionCollectionRef.doc(newDocumentId).update({
         startDate: exhibition.startDate
           ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
           : '',
@@ -343,21 +361,19 @@ app.post('/scrape-feed', async (c) => {
         hasDateChanged: true,
         updatedAt: Timestamp.now(),
       })
-      console.log(`Updated document with hash: ${hash} (dates changed)`)
+      console.log(`Updated document with id: ${newDocumentId} (dates changed)`)
     } else {
-      // Create new document
-      await exhibitionCollectionRef.doc(hash).set(
+      await exhibitionCollectionRef.doc(newDocumentId).set(
         {
           title: exhibition.title,
           venue: canonicalVenueName,
+          museumId: museumId,
           startDate: exhibition.startDate
             ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
             : '',
           endDate: exhibition.endDate
             ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
             : '',
-          officialUrl: undefined,
-          imageUrl: undefined,
           status: 'pending',
           origin: 'scrape-feed',
           isExcluded: false,
@@ -367,11 +383,11 @@ app.post('/scrape-feed', async (c) => {
         },
         { merge: false },
       )
-      console.log(`Added document with hash: ${hash}`)
+      console.log(`Added document with id: ${newDocumentId}`)
     }
   }
 
-  return c.text(`Scrape successful. Found ${filteredExhibitions.length} exhibitions.`, 201)
+  return c.text(`Scrape successful. Found ${transformed.length} exhibitions.`, 201)
 })
 
 export default app

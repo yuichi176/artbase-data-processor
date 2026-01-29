@@ -9,21 +9,14 @@ import crypto from 'crypto'
  * - Collapsing multiple whitespace characters into a single space
  * - Trimming leading and trailing whitespace
  */
-export function normalize(text: string): string {
+function normalize(text: string): string {
   return text.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
 /**
- * Generates a deterministic hash key for an exhibition document.
- * The hash is used as a Firestore document ID to prevent duplicate records.
- *
- * @param title - The exhibition title
- * @param venue - The canonical venue name
- * @returns An MD5 hash string that can be used as a unique document identifier
+ * Generates a deterministic document ID for an exhibition document.
  */
-export function getDocumentHash(title: string, venue: string): string {
-  const normalizedTitle = normalize(title)
-  const normalizedVenue = normalize(venue)
-
-  return crypto.createHash('md5').update(`${normalizedTitle}_${normalizedVenue}`).digest('hex')
+export function getExhibitionDocumentId(museumId: string, title: string): string {
+  const hashedTitle = crypto.createHash('md5').update(normalize(title)).digest('base64url')
+  return `${museumId}_${hashedTitle}`
 }
