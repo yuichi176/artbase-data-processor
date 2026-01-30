@@ -54,14 +54,22 @@ export const apifyResponseWithoutUrlSchema = z
     ),
   )
 
-const venueTypeSchema = z.enum(['美術館', '博物館', 'ギャラリー'])
+export type RawMuseum = {
+  name: string
+  address: string
+  access: string
+  openingInformation: string
+  officialUrl: string
+  scrapeUrl: string
+  aliases?: string[]
+  scrapeEnabled: boolean
+}
 export const museumSchema = z.object({
   id: z.string(),
   name: z.string(),
   address: z.string(),
   access: z.string(),
   openingInformation: z.string(),
-  venueType: venueTypeSchema,
   officialUrl: z.string(),
   scrapeUrl: z.string(),
   aliases: z.array(z.string()).optional(),
