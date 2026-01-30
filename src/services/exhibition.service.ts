@@ -3,9 +3,10 @@ import { Timestamp } from '@google-cloud/firestore'
 import { TZDate } from '@date-fns/tz'
 import { getExhibitionDocumentId } from '../utils/hash.js'
 import { areDatesEqual } from '../utils/date.js'
-import type { ScrapedExhibition, NewExhibitionDocument } from '../types/exhibition.js'
+import type { NewExhibitionDocument } from '../types/exhibition.js'
 import type { MuseumMaps } from '../types/museum.js'
 import { NotFoundError } from '../errors/app-error.js'
+import type { ScrapedExhibition } from '../schemas/exhibition.schema.js'
 
 export function normalizeVenue(venue: string, museumMaps: MuseumMaps): string | null {
   return museumMaps.aliasToName.get(venue) ?? null

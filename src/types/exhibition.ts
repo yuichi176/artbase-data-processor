@@ -22,18 +22,6 @@ export interface ExhibitionDocument {
 }
 
 /**
- * Input exhibition data from scraping services
- */
-export interface ScrapedExhibition {
-  title: string
-  venue: string
-  startDate?: string | null | undefined
-  endDate?: string | null | undefined
-  officialUrl?: string | null | undefined
-  imageUrl?: string | null | undefined
-}
-
-/**
  * Data structure for creating a new exhibition document
  */
 export interface NewExhibitionDocument {
