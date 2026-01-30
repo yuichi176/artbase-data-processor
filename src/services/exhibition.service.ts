@@ -181,7 +181,9 @@ export async function processScrapeResults(
   skipped: number
   errors: number
 }> {
-  const BATCH_SIZE = 100 // Firestore transaction limit is 500, using 100 for safety
+  // Firestore transaction limit is 500 documents (read + write operations combined)
+  // Using 100 to allow safety margin for retries and avoid hitting limits
+  const BATCH_SIZE = 100
 
   const totalResults = {
     created: 0,
