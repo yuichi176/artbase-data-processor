@@ -1,10 +1,3 @@
-import type { Timestamp } from '@google-cloud/firestore'
-
-export interface ExistingExhibition {
-  startDate: Timestamp | string
-  endDate: Timestamp | string
-}
-
 export interface MuseumMaps {
   aliasToName: Map<string, string>
   nameToId: Map<string, string>

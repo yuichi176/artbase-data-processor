@@ -6,7 +6,7 @@ export async function fetchEnabledMuseumsWithUrls(): Promise<{
   museums: Museum[]
   startUrls: Array<{ url: string; method: 'GET' }>
 }> {
-  const snapshot = await db.collection('museum').where('scrapeEnabled', '==', true).get()
+  const snapshot = await db.collection('museum').where('scrapeEnabled', '==', false).get()
 
   const museums: Museum[] = []
   const startUrls: Array<{ url: string; method: 'GET' }> = []

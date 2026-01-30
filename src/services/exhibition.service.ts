@@ -3,29 +3,8 @@ import { Timestamp } from '@google-cloud/firestore'
 import { TZDate } from '@date-fns/tz'
 import { getExhibitionDocumentId } from '../utils/hash.js'
 import { areDatesEqual } from '../utils/date.js'
-import type {
-  ExistingExhibition,
-  MuseumMaps,
-  ProcessExhibitionResult,
-} from '../types/exhibition.js'
+import type { MuseumMaps, ProcessExhibitionResult } from '../types/exhibition.js'
 import { NotFoundError } from '../errors/app-error.js'
-
-export async function fetchExistingExhibitions(): Promise<Map<string, ExistingExhibition>> {
-  const exhibitionCollectionRef = db.collection('exhibition')
-  const snapshot = await exhibitionCollectionRef.get()
-
-  const existingExhibitionsMap = new Map<string, ExistingExhibition>()
-
-  snapshot.forEach((doc) => {
-    const data = doc.data()
-    existingExhibitionsMap.set(doc.id, {
-      startDate: data.startDate,
-      endDate: data.endDate,
-    })
-  })
-
-  return existingExhibitionsMap
-}
 
 export function normalizeVenue(venue: string, museumMaps: MuseumMaps): string | null {
   return museumMaps.aliasToName.get(venue) ?? null
@@ -49,14 +28,12 @@ interface ProcessExhibitionParams {
     imageUrl?: string | null | undefined
   }
   museumMaps: MuseumMaps
-  existingExhibitionsMap: Map<string, ExistingExhibition>
   origin: 'scrape' | 'scrape-feed'
 }
 
 export async function processExhibition({
   exhibition,
   museumMaps,
-  existingExhibitionsMap,
   origin,
 }: ProcessExhibitionParams): Promise<ProcessExhibitionResult> {
   const canonicalVenueName = normalizeVenue(exhibition.venue, museumMaps)
@@ -69,74 +46,84 @@ export async function processExhibition({
 
   const museumId = getMuseumId(canonicalVenueName, museumMaps)
   const documentId = getExhibitionDocumentId(museumId, exhibition.title)
-  const existingExhibition = existingExhibitionsMap.get(documentId)
+  const docRef = db.collection('exhibition').doc(documentId)
 
-  const exhibitionCollectionRef = db.collection('exhibition')
+  // Use transaction for atomic check-and-write to prevent TOCTOU race conditions
+  return await db.runTransaction(async (transaction) => {
+    // Read phase: Get existing document
+    const existingDoc = await transaction.get(docRef)
 
-  if (existingExhibition) {
-    const startDateChanged = !areDatesEqual(existingExhibition.startDate, exhibition.startDate)
-    const endDateChanged = !areDatesEqual(existingExhibition.endDate, exhibition.endDate)
+    if (existingDoc.exists) {
+      // Check for date changes
+      const data = existingDoc.data()
+      if (!data) {
+        throw new Error(`Document ${documentId} exists but has no data`)
+      }
 
-    if (!startDateChanged && !endDateChanged) {
-      console.log(`Skipping duplicate document with id: ${documentId}`)
+      const startDateChanged = !areDatesEqual(data.startDate, exhibition.startDate)
+      const endDateChanged = !areDatesEqual(data.endDate, exhibition.endDate)
+
+      if (!startDateChanged && !endDateChanged) {
+        console.log(`Skipping duplicate document with id: ${documentId}`)
+        return {
+          documentId,
+          action: 'skipped' as const,
+          reason: 'No date changes',
+        }
+      }
+
+      // Write phase: Update existing document with new dates
+      transaction.update(docRef, {
+        startDate: exhibition.startDate
+          ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
+          : '',
+        endDate: exhibition.endDate
+          ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
+          : '',
+        hasDateChanged: true,
+        updatedAt: Timestamp.now(),
+      })
+
+      console.log(`Updated document with id: ${documentId} (dates changed)`)
       return {
         documentId,
-        action: 'skipped',
-        reason: 'No date changes',
+        action: 'updated' as const,
+        reason: 'Dates changed',
       }
     }
 
-    // Update existing document with new dates
-    await exhibitionCollectionRef.doc(documentId).update({
+    // Write phase: Create new document
+    const newExhibition: Record<string, unknown> = {
+      title: exhibition.title,
+      venue: canonicalVenueName,
+      museumId,
       startDate: exhibition.startDate
         ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
         : '',
       endDate: exhibition.endDate
         ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
         : '',
-      hasDateChanged: true,
+      status: 'pending',
+      origin,
+      isExcluded: false,
+      hasDateChanged: false,
+      createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
-    })
+    }
 
-    console.log(`Updated document with id: ${documentId} (dates changed)`)
+    // Add optional fields for scrape origin
+    if (origin === 'scrape' && exhibition.officialUrl) {
+      newExhibition.officialUrl = exhibition.officialUrl
+    }
+
+    transaction.set(docRef, newExhibition)
+
+    console.log(`Added document with id: ${documentId}`)
     return {
       documentId,
-      action: 'updated',
-      reason: 'Dates changed',
+      action: 'created' as const,
     }
-  }
-
-  // Create new document
-  const newExhibition: Record<string, unknown> = {
-    title: exhibition.title,
-    venue: canonicalVenueName,
-    museumId,
-    startDate: exhibition.startDate
-      ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
-      : '',
-    endDate: exhibition.endDate
-      ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
-      : '',
-    status: 'pending',
-    origin,
-    isExcluded: false,
-    hasDateChanged: false,
-    createdAt: Timestamp.now(),
-    updatedAt: Timestamp.now(),
-  }
-
-  // Add optional fields for scrape origin
-  if (origin === 'scrape' && exhibition.officialUrl) {
-    newExhibition.officialUrl = exhibition.officialUrl
-  }
-
-  await exhibitionCollectionRef.doc(documentId).set(newExhibition, { merge: false })
-
-  console.log(`Added document with id: ${documentId}`)
-  return {
-    documentId,
-    action: 'created',
-  }
+  })
 }
 
 export async function processScrapeResults(
@@ -156,8 +143,6 @@ export async function processScrapeResults(
   skipped: number
   errors: number
 }> {
-  const existingExhibitionsMap = await fetchExistingExhibitions()
-
   const results = {
     created: 0,
     updated: 0,
@@ -170,7 +155,6 @@ export async function processScrapeResults(
       const result = await processExhibition({
         exhibition,
         museumMaps,
-        existingExhibitionsMap,
         origin,
       })
 
