@@ -190,6 +190,100 @@ await db.runTransaction(async (transaction) => {
 })
 ```
 
+#### 4. Create-or-Update Pattern (Upsert)
+
+This pattern prevents duplicate creation when processing concurrent requests:
+
+```typescript
+// Real example from exhibition.service.ts
+export async function processExhibition({
+  exhibition,
+  museumMaps,
+  origin,
+}: ProcessExhibitionParams): Promise<ProcessExhibitionResult> {
+  const canonicalVenueName = normalizeVenue(exhibition.venue, museumMaps)
+  if (!canonicalVenueName) {
+    throw new NotFoundError(`Venue not found for exhibition: ${exhibition.venue}`)
+  }
+
+  const museumId = getMuseumId(canonicalVenueName, museumMaps)
+  const documentId = getExhibitionDocumentId(museumId, exhibition.title)
+  const docRef = db.collection('exhibition').doc(documentId)
+
+  // Use transaction for atomic check-and-write to prevent TOCTOU race conditions
+  return await db.runTransaction(async (transaction) => {
+    // Read phase: Check if document exists
+    const existingDoc = await transaction.get(docRef)
+
+    if (existingDoc.exists) {
+      // Document exists - check if dates changed
+      const data = existingDoc.data()
+      if (!data) {
+        throw new Error(`Document ${documentId} exists but has no data`)
+      }
+
+      const startDateChanged = !areDatesEqual(data.startDate, exhibition.startDate)
+      const endDateChanged = !areDatesEqual(data.endDate, exhibition.endDate)
+
+      if (!startDateChanged && !endDateChanged) {
+        // No changes - skip update
+        return { documentId, action: 'skipped', reason: 'No date changes' }
+      }
+
+      // Write phase: Update with new dates
+      transaction.update(docRef, {
+        startDate: exhibition.startDate
+          ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
+          : '',
+        endDate: exhibition.endDate
+          ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
+          : '',
+        hasDateChanged: true,
+        updatedAt: Timestamp.now(),
+      })
+
+      return { documentId, action: 'updated', reason: 'Dates changed' }
+    }
+
+    // Write phase: Create new document
+    transaction.set(docRef, {
+      title: exhibition.title,
+      venue: canonicalVenueName,
+      museumId,
+      startDate: exhibition.startDate
+        ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
+        : '',
+      endDate: exhibition.endDate
+        ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
+        : '',
+      status: 'pending',
+      origin,
+      isExcluded: false,
+      hasDateChanged: false,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    })
+
+    return { documentId, action: 'created' }
+  })
+}
+```
+
+**Why this prevents race conditions:**
+
+Without transactions:
+1. Request A: Checks if exhibition exists → Not found
+2. Request B: Checks if exhibition exists → Not found
+3. Request A: Creates exhibition
+4. Request B: Creates exhibition (overwrites A's data!)
+
+With transactions:
+1. Request A: Starts transaction, reads document → Not found
+2. Request B: Starts transaction, reads document → Not found (but Firestore locks the read)
+3. Request A: Writes document, commits transaction ✓
+4. Request B: Transaction conflicts, Firestore automatically retries
+5. Request B: Retries, reads document → Found (A's creation), updates if needed ✓
+
 ### When NOT to Use Transactions
 
 - **Simple single-document writes**: Use `set()` or `update()` directly

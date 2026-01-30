@@ -464,6 +464,100 @@ await db.runTransaction(async (transaction) => {
 })
 ```
 
+#### 4. Create-or-Update Pattern (Upsert)
+
+This pattern prevents duplicate creation when processing concurrent requests:
+
+```typescript
+// Real example from exhibition.service.ts
+export async function processExhibition({
+  exhibition,
+  museumMaps,
+  origin,
+}: ProcessExhibitionParams): Promise<ProcessExhibitionResult> {
+  const canonicalVenueName = normalizeVenue(exhibition.venue, museumMaps)
+  if (!canonicalVenueName) {
+    throw new NotFoundError(`Venue not found for exhibition: ${exhibition.venue}`)
+  }
+
+  const museumId = getMuseumId(canonicalVenueName, museumMaps)
+  const documentId = getExhibitionDocumentId(museumId, exhibition.title)
+  const docRef = db.collection('exhibition').doc(documentId)
+
+  // Use transaction for atomic check-and-write to prevent TOCTOU race conditions
+  return await db.runTransaction(async (transaction) => {
+    // Read phase: Check if document exists
+    const existingDoc = await transaction.get(docRef)
+
+    if (existingDoc.exists) {
+      // Document exists - check if dates changed
+      const data = existingDoc.data()
+      if (!data) {
+        throw new Error(`Document ${documentId} exists but has no data`)
+      }
+
+      const startDateChanged = !areDatesEqual(data.startDate, exhibition.startDate)
+      const endDateChanged = !areDatesEqual(data.endDate, exhibition.endDate)
+
+      if (!startDateChanged && !endDateChanged) {
+        // No changes - skip update
+        return { documentId, action: 'skipped', reason: 'No date changes' }
+      }
+
+      // Write phase: Update with new dates
+      transaction.update(docRef, {
+        startDate: exhibition.startDate
+          ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
+          : '',
+        endDate: exhibition.endDate
+          ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
+          : '',
+        hasDateChanged: true,
+        updatedAt: Timestamp.now(),
+      })
+
+      return { documentId, action: 'updated', reason: 'Dates changed' }
+    }
+
+    // Write phase: Create new document
+    transaction.set(docRef, {
+      title: exhibition.title,
+      venue: canonicalVenueName,
+      museumId,
+      startDate: exhibition.startDate
+        ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
+        : '',
+      endDate: exhibition.endDate
+        ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
+        : '',
+      status: 'pending',
+      origin,
+      isExcluded: false,
+      hasDateChanged: false,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    })
+
+    return { documentId, action: 'created' }
+  })
+}
+```
+
+**Why this prevents race conditions:**
+
+Without transactions:
+1. Request A: Checks if exhibition exists → Not found
+2. Request B: Checks if exhibition exists → Not found
+3. Request A: Creates exhibition
+4. Request B: Creates exhibition (overwrites A's data!)
+
+With transactions:
+1. Request A: Starts transaction, reads document → Not found
+2. Request B: Starts transaction, reads document → Not found (but Firestore locks the read)
+3. Request A: Writes document, commits transaction ✓
+4. Request B: Transaction conflicts, Firestore automatically retries
+5. Request B: Retries, reads document → Found (A's creation), updates if needed ✓
+
 ### When NOT to Use Transactions
 
 - **Simple single-document writes**: Use `set()` or `update()` directly
@@ -490,6 +584,122 @@ batch.set(ref2, data2)
 batch.delete(ref3)
 await batch.commit()
 ```
+
+## Handling Optional Fields
+
+### Use Undefined/Null Instead of Empty Strings
+
+When a field value is missing or unknown, omit the field entirely or use `null` instead of storing empty strings or placeholder values.
+
+**Why:**
+- **Type Consistency**: Prevents mixing data types (e.g., `Timestamp | string`)
+- **Cleaner Queries**: Easier to filter for missing values
+- **Best Practice**: Aligns with Firestore recommendations
+- **Storage Efficiency**: Omitted fields don't consume storage
+
+**❌ Bad: Using empty strings for missing data**
+
+```typescript
+// Creates inconsistent data types
+const exhibition = {
+  title: 'Exhibition Name',
+  startDate: exhibition.startDate
+    ? Timestamp.fromDate(new Date(exhibition.startDate))
+    : '',  // ❌ Empty string
+  endDate: exhibition.endDate
+    ? Timestamp.fromDate(new Date(exhibition.endDate))
+    : '',  // ❌ Empty string
+}
+
+// Field type becomes: Timestamp | string
+// Queries become complex: need to check for both null AND ''
+```
+
+**✅ Good: Omit fields when data is missing**
+
+```typescript
+// Only include fields that have values
+const exhibition = {
+  title: 'Exhibition Name',
+  ...(exhibition.startDate && {
+    startDate: Timestamp.fromDate(new Date(exhibition.startDate))
+  }),
+  ...(exhibition.endDate && {
+    endDate: Timestamp.fromDate(new Date(exhibition.endDate))
+  }),
+}
+
+// Field type is clean: Timestamp | undefined
+// Queries are simple: field == null or field != null
+```
+
+### Implementation Pattern
+
+Use the spread operator with conditional inclusion:
+
+```typescript
+// Create operation
+const newDocument = {
+  // Required fields
+  title: data.title,
+  createdAt: Timestamp.now(),
+
+  // Optional fields - only include if present
+  ...(data.description && { description: data.description }),
+  ...(data.imageUrl && { imageUrl: data.imageUrl }),
+  ...(data.startDate && {
+    startDate: Timestamp.fromDate(new TZDate(data.startDate, 'Asia/Tokyo'))
+  }),
+}
+
+// Update operation
+transaction.update(docRef, {
+  // Required updates
+  updatedAt: Timestamp.now(),
+
+  // Optional updates - only include if present
+  ...(data.startDate && {
+    startDate: Timestamp.fromDate(new TZDate(data.startDate, 'Asia/Tokyo'))
+  }),
+  ...(data.endDate && {
+    endDate: Timestamp.fromDate(new TZDate(data.endDate, 'Asia/Tokyo'))
+  }),
+})
+```
+
+### Comparing Optional Fields
+
+When comparing optional Timestamp fields:
+
+```typescript
+/**
+ * Compare Firestore Timestamps or undefined values representing missing dates
+ */
+export function areDatesEqual(
+  existing: Timestamp | undefined,
+  incoming: string | undefined | null,
+): boolean {
+  // Convert incoming string to Timestamp if present
+  const incomingDate = incoming
+    ? Timestamp.fromDate(new TZDate(incoming, 'Asia/Tokyo'))
+    : undefined
+
+  // Both undefined/null
+  if (existing === undefined && incomingDate === undefined) {
+    return true
+  }
+
+  // One is undefined, the other is not
+  if (existing === undefined || incomingDate === undefined) {
+    return false
+  }
+
+  // Both are Timestamps - use Firestore's isEqual()
+  return existing.isEqual(incomingDate)
+}
+```
+
+This clean implementation assumes all data follows the pattern of omitting fields when values are missing.
 
 ### References
 
