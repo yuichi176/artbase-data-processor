@@ -1,5 +1,27 @@
 # Artlyst Data Processor
 
+## Development
+
+### Running Tests
+
+Run the test suite:
+
+```bash
+# Run tests in watch mode
+pnpm test
+
+# Run tests once
+pnpm test:run
+
+# Run tests with UI
+pnpm test:ui
+
+# Run tests with coverage report
+pnpm test:coverage
+```
+
+The test suite uses Vitest and includes comprehensive tests for all service layer functions. Coverage reports are generated in the `coverage/` directory.
+
 ## Request from local environment
 
 ```bash

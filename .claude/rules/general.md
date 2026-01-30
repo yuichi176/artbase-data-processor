@@ -16,6 +16,12 @@ This is a TypeScript-based data processor built with Hono.js, a lightweight web 
 - `pnpm run format` - Format code with Prettier
 - `pnpm run typecheck` - Run TypeScript type checking without emitting files
 
+## Testing Commands
+
+- `pnpm run test` - Run tests in watch mode (for development)
+- `pnpm run test:run` - Run tests once (for CI/CD)
+- `pnpm run test:coverage` - Run tests with coverage report
+
 ## Architecture
 
 - **Framework**: Hono.js web framework running on Node.js
@@ -23,6 +29,7 @@ This is a TypeScript-based data processor built with Hono.js, a lightweight web 
 - **Module System**: ES modules (`"type": "module"` in package.json)
 - **Build Tool**: TypeScript compiler (tsc)
 - **Dev Tool**: tsx for development with watch mode
+- **Test Framework**: Vitest with @vitest/ui and @vitest/coverage-v8
 - **Port**: Application runs on port 8080 (configurable via PORT environment variable)
 - **Architecture Pattern**: Layered architecture with service layer separation
 
@@ -50,8 +57,11 @@ src/
 │   └── exhibition.ts     # Exhibition scraping endpoints
 ├── services/             # Business logic layer
 │   ├── apify.service.ts       # Apify actor execution
+│   ├── apify.service.test.ts  # Unit tests for Apify service
 │   ├── exhibition.service.ts  # Exhibition processing logic
-│   └── museum.service.ts      # Museum data operations
+│   ├── exhibition.service.test.ts  # Unit tests for exhibition service
+│   ├── museum.service.ts      # Museum data operations
+│   └── museum.service.test.ts # Unit tests for museum service
 ├── schemas/              # Zod validation schemas (runtime validation)
 │   ├── exhibition.schema.ts   # Exhibition data schemas
 │   ├── museum.schema.ts       # Museum document schemas
@@ -67,6 +77,8 @@ src/
     ├── date.ts           # Date comparison utilities
     └── hash.ts           # Document ID generation
 ```
+
+**Note**: Test files (`.test.ts`) are co-located with their source files for easy maintenance.
 
 ## Architectural Principles
 
@@ -108,6 +120,17 @@ The codebase follows a layered architecture:
 - Use Zod for runtime validation of external data
 - Extend base interfaces when needed (e.g., `AppEnv extends Record<string, unknown>`)
 - Avoid type assertions (`as`) when possible
+- In tests, use type assertions (`as`) for partial mock objects when necessary
+
+### Testing Strategy
+
+- **Test Coverage**: Aim for 80%+ code coverage on service layer
+- **What to Test**: Business logic, data transformations, error handling, async operations
+- **What NOT to Test**: Type definitions, simple getters/setters, external libraries
+- **Mocking**: Always mock external dependencies (Firestore, Apify, etc.)
+- **Test Location**: Co-locate test files with source files (e.g., `service.ts` and `service.test.ts`)
+- **Test Naming**: Use descriptive names that explain the expected behavior
+- **CI/CD Integration**: Tests run automatically on `pre-push` git hook via lefthook
 
 ## Key Dependencies
 
