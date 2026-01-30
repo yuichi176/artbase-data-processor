@@ -585,6 +585,122 @@ batch.delete(ref3)
 await batch.commit()
 ```
 
+## Handling Optional Fields
+
+### Use Undefined/Null Instead of Empty Strings
+
+When a field value is missing or unknown, omit the field entirely or use `null` instead of storing empty strings or placeholder values.
+
+**Why:**
+- **Type Consistency**: Prevents mixing data types (e.g., `Timestamp | string`)
+- **Cleaner Queries**: Easier to filter for missing values
+- **Best Practice**: Aligns with Firestore recommendations
+- **Storage Efficiency**: Omitted fields don't consume storage
+
+**❌ Bad: Using empty strings for missing data**
+
+```typescript
+// Creates inconsistent data types
+const exhibition = {
+  title: 'Exhibition Name',
+  startDate: exhibition.startDate
+    ? Timestamp.fromDate(new Date(exhibition.startDate))
+    : '',  // ❌ Empty string
+  endDate: exhibition.endDate
+    ? Timestamp.fromDate(new Date(exhibition.endDate))
+    : '',  // ❌ Empty string
+}
+
+// Field type becomes: Timestamp | string
+// Queries become complex: need to check for both null AND ''
+```
+
+**✅ Good: Omit fields when data is missing**
+
+```typescript
+// Only include fields that have values
+const exhibition = {
+  title: 'Exhibition Name',
+  ...(exhibition.startDate && {
+    startDate: Timestamp.fromDate(new Date(exhibition.startDate))
+  }),
+  ...(exhibition.endDate && {
+    endDate: Timestamp.fromDate(new Date(exhibition.endDate))
+  }),
+}
+
+// Field type is clean: Timestamp | undefined
+// Queries are simple: field == null or field != null
+```
+
+### Implementation Pattern
+
+Use the spread operator with conditional inclusion:
+
+```typescript
+// Create operation
+const newDocument = {
+  // Required fields
+  title: data.title,
+  createdAt: Timestamp.now(),
+
+  // Optional fields - only include if present
+  ...(data.description && { description: data.description }),
+  ...(data.imageUrl && { imageUrl: data.imageUrl }),
+  ...(data.startDate && {
+    startDate: Timestamp.fromDate(new TZDate(data.startDate, 'Asia/Tokyo'))
+  }),
+}
+
+// Update operation
+transaction.update(docRef, {
+  // Required updates
+  updatedAt: Timestamp.now(),
+
+  // Optional updates - only include if present
+  ...(data.startDate && {
+    startDate: Timestamp.fromDate(new TZDate(data.startDate, 'Asia/Tokyo'))
+  }),
+  ...(data.endDate && {
+    endDate: Timestamp.fromDate(new TZDate(data.endDate, 'Asia/Tokyo'))
+  }),
+})
+```
+
+### Comparing Optional Fields
+
+When comparing optional Timestamp fields:
+
+```typescript
+/**
+ * Compare Firestore Timestamps or undefined values representing missing dates
+ */
+export function areDatesEqual(
+  existing: Timestamp | undefined,
+  incoming: string | undefined | null,
+): boolean {
+  // Convert incoming string to Timestamp if present
+  const incomingDate = incoming
+    ? Timestamp.fromDate(new TZDate(incoming, 'Asia/Tokyo'))
+    : undefined
+
+  // Both undefined/null
+  if (existing === undefined && incomingDate === undefined) {
+    return true
+  }
+
+  // One is undefined, the other is not
+  if (existing === undefined || incomingDate === undefined) {
+    return false
+  }
+
+  // Both are Timestamps - use Firestore's isEqual()
+  return existing.isEqual(incomingDate)
+}
+```
+
+This clean implementation assumes all data follows the pattern of omitting fields when values are missing.
+
 ### References
 
 - [Firestore Transactions Documentation](https://firebase.google.com/docs/firestore/manage-data/transactions)

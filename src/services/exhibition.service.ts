@@ -74,12 +74,12 @@ export async function processExhibition({
 
       // Write phase: Update existing document with new dates
       transaction.update(docRef, {
-        startDate: exhibition.startDate
-          ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
-          : '',
-        endDate: exhibition.endDate
-          ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
-          : '',
+        ...(exhibition.startDate && {
+          startDate: Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo')),
+        }),
+        ...(exhibition.endDate && {
+          endDate: Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo')),
+        }),
         hasDateChanged: true,
         updatedAt: Timestamp.now(),
       })
@@ -97,23 +97,19 @@ export async function processExhibition({
       title: exhibition.title,
       venue: canonicalVenueName,
       museumId,
-      startDate: exhibition.startDate
-        ? Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo'))
-        : '',
-      endDate: exhibition.endDate
-        ? Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo'))
-        : '',
+      ...(exhibition.startDate && {
+        startDate: Timestamp.fromDate(new TZDate(exhibition.startDate, 'Asia/Tokyo')),
+      }),
+      ...(exhibition.endDate && {
+        endDate: Timestamp.fromDate(new TZDate(exhibition.endDate, 'Asia/Tokyo')),
+      }),
       status: 'pending',
       origin,
       isExcluded: false,
       hasDateChanged: false,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
-    }
-
-    // Add optional fields for scrape origin
-    if (origin === 'scrape' && exhibition.officialUrl) {
-      newExhibition.officialUrl = exhibition.officialUrl
+      ...(origin === 'scrape' && exhibition.officialUrl && { officialUrl: exhibition.officialUrl }),
     }
 
     transaction.set(docRef, newExhibition)
