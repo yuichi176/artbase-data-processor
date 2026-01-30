@@ -100,15 +100,35 @@ When TypeScript complains about mock types, use appropriate type assertions:
 // For simple mocks
 vi.mocked(db.default.collection).mockReturnValue(mockValue as never)
 
-// For complex types that are difficult to satisfy
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-return await callback(mockTransaction as any)
+// For complex types like Firestore Transaction, define a simplified mock type
+type MockTransaction = {
+  get: ReturnType<typeof vi.fn>
+  set: ReturnType<typeof vi.fn>
+  update: ReturnType<typeof vi.fn>
+}
+
+const mockTransaction: MockTransaction = {
+  get: vi.fn(),
+  set: vi.fn(),
+  update: vi.fn(),
+}
+
+// Use the mock type with 'as never' for type assertion
+vi.mocked(db.default.runTransaction).mockImplementation(async (callback) => {
+  return await callback(mockTransaction as never)
+})
 
 // For partial objects in tests
 const input = {
   startUrls: [{ url: 'https://example.com', method: 'GET' }],
 } as ApifyActorInput  // Use 'as' instead of 'satisfies' for partial mocks
 ```
+
+**Benefits of Mock Types:**
+- Eliminates ESLint disable comments
+- Makes mock structure explicit and reusable
+- Improves maintainability
+- Provides better IDE autocomplete
 
 ## 3. Testing Patterns
 
@@ -192,12 +212,19 @@ describe('getMuseumId', () => {
 
 ### Testing Async Functions with Transactions
 
-For complex async operations like Firestore transactions:
+For complex async operations like Firestore transactions, define a mock type:
 
 ```typescript
+// Define mock type at the top of the test file
+type MockTransaction = {
+  get: ReturnType<typeof vi.fn>
+  set: ReturnType<typeof vi.fn>
+  update: ReturnType<typeof vi.fn>
+}
+
 describe('processScrapeResults', () => {
   it('should create new exhibitions successfully', async () => {
-    const mockTransaction = {
+    const mockTransaction: MockTransaction = {
       get: vi.fn().mockImplementation((ref) => {
         if (Array.isArray(ref)) {
           return Promise.resolve(ref.map(() => ({ exists: false })))
@@ -209,9 +236,9 @@ describe('processScrapeResults', () => {
     }
 
     const db = await import('../lib/firestore.js')
+    // Firestore's Transaction type is complex, so we use our simplified MockTransaction
     vi.mocked(db.default.runTransaction).mockImplementation(async (callback) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return await callback(mockTransaction as any)
+      return await callback(mockTransaction as never)
     })
 
     const result = await processScrapeResults(exhibitions, museumMaps, 'scrape')
@@ -221,6 +248,8 @@ describe('processScrapeResults', () => {
   })
 })
 ```
+
+**Note**: Using a typed mock eliminates the need for ESLint disable comments and makes the mock structure reusable across multiple tests.
 
 ## 4. Test Data Management
 
@@ -418,9 +447,25 @@ it('should not update any exhibitions', () => {
 
 If you encounter type errors with mocks:
 
-1. Use `as never` for simple cases
-2. Use `as any` with ESLint disable comment for complex types
-3. Use type assertions for partial objects: `as Type` instead of `satisfies Type`
+1. **For simple mocks**: Use `as never`
+   ```typescript
+   vi.mocked(db.default.collection).mockReturnValue(mockValue as never)
+   ```
+
+2. **For complex types**: Define a mock type instead of using `as any`
+   ```typescript
+   type MockTransaction = {
+     get: ReturnType<typeof vi.fn>
+     set: ReturnType<typeof vi.fn>
+   }
+   const mockTransaction: MockTransaction = { get: vi.fn(), set: vi.fn() }
+   callback(mockTransaction as never)
+   ```
+
+3. **For partial objects**: Use type assertions `as Type` instead of `satisfies Type`
+   ```typescript
+   const input = { startUrls: [...] } as ApifyActorInput
+   ```
 
 ### Mock Not Working
 

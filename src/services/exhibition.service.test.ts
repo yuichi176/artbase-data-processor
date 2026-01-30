@@ -4,6 +4,16 @@ import type { MuseumMaps } from '../types/museum.js'
 import type { ScrapedExhibition } from '../schemas/exhibition.schema.js'
 import { NotFoundError } from '../errors/app-error.js'
 
+/**
+ * Mock type for Firestore transaction object
+ * Used to avoid complex Firestore Transaction type in tests
+ */
+type MockTransaction = {
+  get: ReturnType<typeof vi.fn>
+  set: ReturnType<typeof vi.fn>
+  update: ReturnType<typeof vi.fn>
+}
+
 // Mock dependencies
 vi.mock('../lib/firestore.js', () => ({
   default: {
@@ -104,7 +114,7 @@ describe('exhibition.service', () => {
         nameToId: new Map([['東京国立博物館', 'museum1']]),
       } satisfies MuseumMaps
 
-      const mockTransaction = {
+      const mockTransaction: MockTransaction = {
         get: vi.fn().mockImplementation((ref) => {
           if (Array.isArray(ref)) {
             return Promise.resolve(ref.map(() => ({ exists: false })))
@@ -123,9 +133,9 @@ describe('exhibition.service', () => {
       })
 
       vi.mocked(db.default.collection).mockImplementation(mockCollection as never)
+      // Firestore's Transaction type is complex, so we use our simplified MockTransaction
       vi.mocked(db.default.runTransaction).mockImplementation(async (callback) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return await callback(mockTransaction as any)
+        return await callback(mockTransaction as never)
       })
 
       const result = await processScrapeResults(exhibitions, museumMaps, 'scrape')
@@ -151,13 +161,16 @@ describe('exhibition.service', () => {
         nameToId: new Map([['東京国立博物館', 'museum1']]),
       } satisfies MuseumMaps
 
+      const mockTransaction: MockTransaction = {
+        get: vi.fn(),
+        set: vi.fn(),
+        update: vi.fn(),
+      }
+
       const db = await import('../lib/firestore.js')
+      // Firestore's Transaction type is complex, so we use our simplified MockTransaction
       vi.mocked(db.default.runTransaction).mockImplementation(async (callback) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return await callback({
-          get: vi.fn(),
-          set: vi.fn(),
-        } as any)
+        return await callback(mockTransaction as never)
       })
 
       const result = await processScrapeResults(exhibitions, museumMaps, 'scrape')
@@ -188,7 +201,7 @@ describe('exhibition.service', () => {
         endDate: '2024-03-31',
       }
 
-      const mockTransaction = {
+      const mockTransaction: MockTransaction = {
         get: vi.fn().mockImplementation((ref) => {
           if (Array.isArray(ref)) {
             return Promise.resolve(
@@ -253,7 +266,7 @@ describe('exhibition.service', () => {
         endDate: '2024-03-31',
       }
 
-      const mockTransaction = {
+      const mockTransaction: MockTransaction = {
         get: vi.fn().mockImplementation((ref) => {
           if (Array.isArray(ref)) {
             return Promise.resolve(
@@ -310,7 +323,7 @@ describe('exhibition.service', () => {
         nameToId: new Map([['東京国立博物館', 'museum1']]),
       } satisfies MuseumMaps
 
-      const mockTransaction = {
+      const mockTransaction: MockTransaction = {
         get: vi.fn().mockImplementation((ref) => {
           if (Array.isArray(ref)) {
             return Promise.resolve(ref.map(() => ({ exists: false })))
@@ -329,9 +342,9 @@ describe('exhibition.service', () => {
       })
 
       vi.mocked(db.default.collection).mockImplementation(mockCollection as never)
+      // Firestore's Transaction type is complex, so we use our simplified MockTransaction
       vi.mocked(db.default.runTransaction).mockImplementation(async (callback) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return await callback(mockTransaction as any)
+        return await callback(mockTransaction as never)
       })
 
       const result = await processScrapeResults(exhibitions, museumMaps, 'scrape')
