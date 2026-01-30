@@ -42,15 +42,14 @@ export function buildMuseumMaps(museums: Museum[]): MuseumMaps {
   const nameToId = new Map<string, string>()
 
   for (const museum of museums) {
-    // Map museum name to itself
-    aliasToName.set(museum.name, museum.name)
+    // Map museum canonical name to ID
     nameToId.set(museum.name, museum.id)
 
-    // Map aliases to canonical name
+    // Map canonical name and aliases to canonical name
+    aliasToName.set(museum.name, museum.name)
     if (museum.aliases) {
       for (const alias of museum.aliases) {
         aliasToName.set(alias, museum.name)
-        nameToId.set(alias, museum.id)
       }
     }
   }
