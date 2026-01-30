@@ -35,8 +35,7 @@ jobs:
         run: pnpm install
 
       - name: Run tests
-        # TODO: run test when implemented
-        run: echo "Tests would run here"
+        run: pnpm test:run
 
       - name: Build project
         run: pnpm build
