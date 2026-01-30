@@ -14,7 +14,6 @@ This is a TypeScript-based data processor built with Hono.js, a lightweight web 
 - `pnpm run lint` - Run ESLint on TypeScript files
 - `pnpm run lint:fix` - Run ESLint with auto-fix
 - `pnpm run format` - Format code with Prettier
-- `pnpm run format:check` - Check code formatting with Prettier
 - `pnpm run typecheck` - Run TypeScript type checking without emitting files
 
 ## Architecture
@@ -25,6 +24,7 @@ This is a TypeScript-based data processor built with Hono.js, a lightweight web 
 - **Build Tool**: TypeScript compiler (tsc)
 - **Dev Tool**: tsx for development with watch mode
 - **Port**: Application runs on port 8080 (configurable via PORT environment variable)
+- **Architecture Pattern**: Layered architecture with service layer separation
 
 ## Key Configuration
 
@@ -38,5 +38,88 @@ This is a TypeScript-based data processor built with Hono.js, a lightweight web 
 
 ## Project Structure
 
-- `src/index.ts` - Main application entry point with Hono server setup
-- Single-file application currently with basic "Hello Hono!" endpoint
+```
+src/
+├── index.ts              # Main application entry point with global error handler
+├── config/               # Configuration files
+│   └── apify.config.ts   # Apify actor configuration builders
+├── errors/               # Custom error classes
+│   └── app-error.ts      # AppError, ValidationError, NotFoundError, etc.
+├── routes/               # HTTP route handlers (thin orchestration layer)
+│   ├── health.ts         # Health check endpoint
+│   └── exhibition.ts     # Exhibition scraping endpoints
+├── services/             # Business logic layer
+│   ├── apify.service.ts       # Apify actor execution
+│   ├── exhibition.service.ts  # Exhibition processing logic
+│   └── museum.service.ts      # Museum data operations
+├── types/                # TypeScript type definitions
+│   ├── env.ts            # Environment variable types
+│   └── exhibition.ts     # Domain-specific types
+├── lib/                  # External service clients
+│   ├── apify.ts          # Apify client initialization
+│   └── firestore.ts      # Firestore client initialization
+├── utils/                # Utility functions
+│   ├── date.ts           # Date comparison utilities
+│   └── hash.ts           # Document ID generation
+└── schema.ts             # Zod validation schemas
+```
+
+## Architectural Principles
+
+### Separation of Concerns
+
+The codebase follows a layered architecture:
+
+1. **Routes Layer** (`routes/`): Thin handlers that orchestrate requests
+   - Validate environment variables
+   - Call service layer methods
+   - Return HTTP responses
+   - Should be 30-50 lines per endpoint
+
+2. **Service Layer** (`services/`): Business logic implementation
+   - Pure business logic, no HTTP concerns
+   - Reusable across different endpoints
+   - Throws custom errors for error handling
+
+3. **Data Access Layer** (`lib/`): External service clients
+   - Firestore database access
+   - Apify API integration
+   - Initialized once at module load
+
+4. **Configuration Layer** (`config/`): Centralized configuration
+   - Extract magic numbers and strings
+   - Builder functions for complex configurations
+   - Environment-agnostic settings
+
+### Error Handling
+
+- Use custom error classes from `errors/app-error.ts`
+- Global error handler in `index.ts` catches all errors
+- Service layer throws domain-specific errors
+- Route layer catches and returns appropriate HTTP responses
+
+### Type Safety
+
+- Define domain types in `types/` directory
+- Use Zod for runtime validation of external data
+- Extend base interfaces when needed (e.g., `AppEnv extends Record<string, unknown>`)
+- Avoid type assertions (`as`) when possible
+
+## Key Dependencies
+
+- `hono` - Web framework
+- `@hono/node-server` - Node.js adapter for Hono
+- `@hono/zod-validator` - Zod validation middleware
+- `zod` - Schema validation
+- `@google-cloud/firestore` - Firestore database client
+- `apify-client` - Apify web scraping platform client
+- `@date-fns/tz` - Timezone-aware date handling
+
+## Environment Variables
+
+Required environment variables (defined in `types/env.ts`):
+
+- `APIFY_API_TOKEN` - Apify API authentication token
+- `APIFY_ACTOR_ID` - Apify actor ID for web scraping
+- `OPENAI_API_KEY` - OpenAI API key for AI-powered scraping
+- `PORT` - Server port (optional, defaults to 8080)
