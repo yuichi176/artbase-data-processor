@@ -3,7 +3,8 @@ import { Timestamp } from '@google-cloud/firestore'
 import { TZDate } from '@date-fns/tz'
 import { getExhibitionDocumentId } from '../utils/hash.js'
 import { areDatesEqual } from '../utils/date.js'
-import type { MuseumMaps, ProcessExhibitionResult } from '../types/exhibition.js'
+import type { ScrapedExhibition, NewExhibitionDocument } from '../types/exhibition.js'
+import type { MuseumMaps } from '../types/museum.js'
 import { NotFoundError } from '../errors/app-error.js'
 
 export function normalizeVenue(venue: string, museumMaps: MuseumMaps): string | null {
@@ -18,24 +19,19 @@ export function getMuseumId(venueName: string, museumMaps: MuseumMaps): string {
   return museumId
 }
 
-interface ProcessExhibitionParams {
-  exhibition: {
-    title: string
-    venue: string
-    startDate?: string | null | undefined
-    endDate?: string | null | undefined
-    officialUrl?: string | null | undefined
-    imageUrl?: string | null | undefined
-  }
-  museumMaps: MuseumMaps
-  origin: 'scrape' | 'scrape-feed'
-}
-
 export async function processExhibition({
   exhibition,
   museumMaps,
   origin,
-}: ProcessExhibitionParams): Promise<ProcessExhibitionResult> {
+}: {
+  exhibition: ScrapedExhibition
+  museumMaps: MuseumMaps
+  origin: 'scrape' | 'scrape-feed'
+}): Promise<{
+  documentId: string
+  action: 'created' | 'updated' | 'skipped'
+  reason?: string
+}> {
   const canonicalVenueName = normalizeVenue(exhibition.venue, museumMaps)
 
   if (!canonicalVenueName) {
@@ -93,7 +89,7 @@ export async function processExhibition({
     }
 
     // Write phase: Create new document
-    const newExhibition: Record<string, unknown> = {
+    const newExhibition = {
       title: exhibition.title,
       venue: canonicalVenueName,
       museumId,
@@ -110,7 +106,7 @@ export async function processExhibition({
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
       ...(origin === 'scrape' && exhibition.officialUrl && { officialUrl: exhibition.officialUrl }),
-    }
+    } satisfies NewExhibitionDocument
 
     transaction.set(docRef, newExhibition)
 
@@ -123,14 +119,7 @@ export async function processExhibition({
 }
 
 export async function processScrapeResults(
-  exhibitions: Array<{
-    title: string
-    venue: string
-    startDate?: string | null | undefined
-    endDate?: string | null | undefined
-    officialUrl?: string | null | undefined
-    imageUrl?: string | null | undefined
-  }>,
+  exhibitions: Array<ScrapedExhibition>,
   museumMaps: MuseumMaps,
   origin: 'scrape' | 'scrape-feed',
 ): Promise<{

@@ -1,6 +1,6 @@
 import apifyClient from '../lib/apify.js'
-import type { ApifyActorInput } from '../types/exhibition.js'
 import { ExternalServiceError } from '../errors/app-error.js'
+import type { ApifyActorInput } from '../types/apify.js'
 
 const ACTOR_TIMEOUT_SECONDS = 300
 

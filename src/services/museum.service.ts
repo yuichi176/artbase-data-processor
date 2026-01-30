@@ -1,6 +1,6 @@
 import db from '../lib/firestore.js'
-import type { Museum, RawMuseum } from '../schema.js'
-import type { MuseumMaps } from '../types/exhibition.js'
+import type { Museum } from '../schemas/museum.schema.js'
+import type { MuseumDocument, MuseumMaps } from '../types/museum.js'
 
 export async function fetchEnabledMuseumsWithUrls(): Promise<{
   museums: Museum[]
@@ -12,7 +12,7 @@ export async function fetchEnabledMuseumsWithUrls(): Promise<{
   const startUrls: Array<{ url: string; method: 'GET' }> = []
 
   snapshot.docs.forEach((doc) => {
-    const museum = doc.data() as RawMuseum
+    const museum = doc.data() as MuseumDocument
     museums.push({
       ...museum,
       id: doc.id,
@@ -29,7 +29,7 @@ export async function fetchEnabledMuseumsWithUrls(): Promise<{
 export async function fetchAllMuseums(): Promise<Museum[]> {
   const snapshot = await db.collection('museum').get()
   return snapshot.docs.map((doc) => {
-    const museum = doc.data() as RawMuseum
+    const museum = doc.data() as MuseumDocument
     return {
       ...museum,
       id: doc.id,

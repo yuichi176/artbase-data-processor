@@ -1,4 +1,4 @@
-import type { ApifyActorInput } from '../types/exhibition.js'
+import type { ApifyActorInput } from '../types/apify.js'
 
 const BASE_CONFIG = {
   excludeUrlGlobs: [{ glob: '' }],

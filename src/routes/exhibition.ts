@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { env } from 'hono/adapter'
-import { apifyResponseSchema, apifyResponseWithoutUrlSchema } from '../schema.js'
+import { apifyResponseSchema, apifyFeedResponseSchema } from '../schemas/apify.schema.js'
 import { buildScrapeActorInput, buildScrapeFeedActorInput } from '../config/apify.config.js'
 import { runActorAndGetResults } from '../services/apify.service.js'
 import {
@@ -72,7 +72,7 @@ app.post('/scrape-feed', async (c) => {
 
   // Run Apify actor and get results
   const rawResults = await runActorAndGetResults(APIFY_ACTOR_ID, input)
-  const exhibitions = apifyResponseWithoutUrlSchema.parse(rawResults)
+  const exhibitions = apifyFeedResponseSchema.parse(rawResults)
 
   console.log('Transformed data:', exhibitions)
 

@@ -1,31 +1,52 @@
-export interface MuseumMaps {
-  aliasToName: Map<string, string>
-  nameToId: Map<string, string>
+import type { Timestamp } from '@google-cloud/firestore'
+
+type Status = 'active' | 'pending'
+type Origin = 'scrape' | 'scrape-feed' | 'manual'
+
+/**
+ * Exhibition document structure in Firestore
+ */
+export interface ExhibitionDocument {
+  title: string
+  venue: string
+  museumId: string
+  startDate?: Timestamp
+  endDate?: Timestamp
+  status: Status
+  origin?: Origin
+  isExcluded: boolean
+  hasDateChanged: boolean
+  createdAt: Timestamp
+  updatedAt: Timestamp
+  officialUrl?: string
 }
 
-export interface ApifyActorInput {
-  excludeUrlGlobs: Array<{ glob: string }>
-  instructions: string
-  linkSelector: string
-  maxCrawlingDepth: number
-  maxPagesPerCrawl: number
-  model: string
-  openaiApiKey: string
-  proxyConfiguration: {
-    useApifyProxy: boolean
-    apifyProxyGroups: string[]
-  }
-  removeElementsCssSelector: string
-  removeLinkUrls: boolean
-  saveSnapshots: boolean
-  schema: object
-  schemaDescription: string
-  startUrls: Array<{ url: string; method: 'GET' }>
-  useStructureOutput: boolean
+/**
+ * Input exhibition data from scraping services
+ */
+export interface ScrapedExhibition {
+  title: string
+  venue: string
+  startDate?: string | null | undefined
+  endDate?: string | null | undefined
+  officialUrl?: string | null | undefined
+  imageUrl?: string | null | undefined
 }
 
-export interface ProcessExhibitionResult {
-  documentId: string
-  action: 'created' | 'updated' | 'skipped'
-  reason?: string
+/**
+ * Data structure for creating a new exhibition document
+ */
+export interface NewExhibitionDocument {
+  title: string
+  venue: string
+  museumId: string
+  startDate?: Timestamp
+  endDate?: Timestamp
+  status: 'pending'
+  origin: 'scrape' | 'scrape-feed'
+  isExcluded: boolean
+  hasDateChanged: boolean
+  createdAt: Timestamp
+  updatedAt: Timestamp
+  officialUrl?: string
 }
