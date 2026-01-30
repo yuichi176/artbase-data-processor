@@ -74,8 +74,6 @@ app.post('/scrape-feed', async (c) => {
   const rawResults = await runActorAndGetResults(APIFY_ACTOR_ID, input)
   const exhibitions = apifyFeedResponseSchema.parse(rawResults)
 
-  console.log('Transformed data:', exhibitions)
-
   // Build museum maps for venue normalization
   const museumMaps = buildMuseumMaps(museums)
 
