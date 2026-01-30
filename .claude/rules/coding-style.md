@@ -8,6 +8,7 @@ Organize code by technical concern, not by feature:
 src/
 ├── routes/      # HTTP handlers (one file per resource)
 ├── services/    # Business logic (one file per domain)
+├── schemas/     # Zod validation schemas
 ├── types/       # TypeScript type definitions
 ├── config/      # Configuration builders
 ├── errors/      # Custom error classes
@@ -19,6 +20,7 @@ src/
 
 - **Routes**: One file per REST resource (e.g., `exhibition.ts`, `museum.ts`)
 - **Services**: One file per domain entity (e.g., `exhibition.service.ts`, `museum.service.ts`)
+- **Schemas**: One file per domain or data source (e.g., `exhibition.schema.ts`, `apify.schema.ts`)
 - **Types**: Group related types in a single file (e.g., `exhibition.ts` contains all exhibition-related types)
 - **Config**: One file per external service or complex configuration (e.g., `apify.config.ts`)
 
@@ -26,7 +28,8 @@ src/
 
 - **Routes**: `{resource}.ts` (e.g., `exhibition.ts`, `health.ts`)
 - **Services**: `{domain}.service.ts` (e.g., `exhibition.service.ts`)
-- **Types**: `{domain}.ts` (e.g., `exhibition.ts`, `env.ts`)
+- **Schemas**: `{domain}.schema.ts` (e.g., `exhibition.schema.ts`, `apify.schema.ts`)
+- **Types**: `{domain}.ts` (e.g., `exhibition.ts`, `museum.ts`, `env.ts`)
 - **Config**: `{service}.config.ts` (e.g., `apify.config.ts`)
 - **Errors**: `app-error.ts` for all custom error classes
 - **Utils**: Descriptive names (e.g., `date.ts`, `hash.ts`)
@@ -184,6 +187,185 @@ export interface ProcessExhibitionResult {
 }
 ```
 
+### 6. Schema and Type Organization
+
+Separate Zod validation schemas from TypeScript type definitions to maintain clear boundaries between runtime validation and compile-time type checking.
+
+#### Schema Files (`schemas/`)
+
+Zod schemas for runtime validation of external data:
+
+```typescript
+// schemas/exhibition.schema.ts
+import { z } from 'zod'
+
+/**
+ * Schema for exhibition data scraped from museum websites via Apify
+ */
+export const scrapedExhibitionSchema = z.object({
+  title: z.string(),
+  venue: z.string(),
+  startDate: z.string().nullish(),
+  endDate: z.string().nullish(),
+  officialUrl: z.string().nullish(),
+  imageUrl: z.string().nullish(),
+})
+
+/**
+ * Inferred type for scraped exhibition data
+ */
+export type ScrapedExhibition = z.infer<typeof scrapedExhibitionSchema>
+```
+
+#### Type Files (`types/`)
+
+TypeScript interfaces for internal data structures:
+
+```typescript
+// types/exhibition.ts
+import type { Timestamp } from '@google-cloud/firestore'
+
+/**
+ * Exhibition document structure in Firestore
+ */
+export interface ExhibitionDocument {
+  title: string
+  venue: string
+  museumId: string
+  startDate?: Timestamp
+  endDate?: Timestamp
+  status: 'pending' | 'approved' | 'rejected'
+  origin: 'scrape' | 'scrape-feed'
+  isExcluded: boolean
+  hasDateChanged: boolean
+  createdAt: Timestamp
+  updatedAt: Timestamp
+  officialUrl?: string
+}
+
+/**
+ * Data structure for creating a new exhibition document
+ */
+export interface NewExhibitionDocument {
+  title: string
+  venue: string
+  museumId: string
+  startDate?: Timestamp
+  endDate?: Timestamp
+  status: 'pending' | 'approved' | 'rejected'
+  origin: 'scrape' | 'scrape-feed'
+  isExcluded: boolean
+  hasDateChanged: boolean
+  createdAt: Timestamp
+  updatedAt: Timestamp
+  officialUrl?: string
+}
+```
+
+#### Naming Conventions for Schemas and Types
+
+**Schema Naming:**
+- Use descriptive names that indicate the data source: `scrapedExhibitionSchema`, `apifyResponseSchema`
+- Suffix with `Schema` to distinguish from types: `museumDocumentSchema`
+- Use camelCase
+
+**Type Naming:**
+- Use domain-specific names: `ExhibitionDocument`, `MuseumDocument`
+- Suffix with purpose: `NewExhibitionDocument`, `ExhibitionUpdateData`
+- Use PascalCase
+
+**Examples:**
+
+| Data | Schema Name | Type Name |
+|------|------------|-----------|
+| Scraped exhibition | `scrapedExhibitionSchema` | `ScrapedExhibition` (inferred) |
+| Firestore exhibition | N/A | `ExhibitionDocument` |
+| New exhibition | N/A | `NewExhibitionDocument` |
+| Apify response | `apifyResponseSchema` | Inferred from schema |
+| Museum document | `museumDocumentSchema` | `Museum` (inferred) |
+
+#### Type Safety Best Practices
+
+**❌ Bad: Using loose types**
+
+```typescript
+const newExhibition: Record<string, unknown> = {
+  title: exhibition.title,
+  venue: canonicalVenueName,
+  // No compile-time type checking
+}
+```
+
+**✅ Good: Using `satisfies` for type validation with better inference**
+
+```typescript
+const newExhibition = {
+  title: exhibition.title,
+  venue: canonicalVenueName,
+  museumId,
+  status: 'pending',  // Preserves literal type 'pending'
+  origin,
+  isExcluded: false,
+  hasDateChanged: false,
+  createdAt: Timestamp.now(),
+  updatedAt: Timestamp.now(),
+} satisfies NewExhibitionDocument
+
+// Add optional fields conditionally
+if (exhibition.startDate) {
+  newExhibition.startDate = Timestamp.fromDate(
+    new TZDate(exhibition.startDate, 'Asia/Tokyo')
+  )
+}
+```
+
+**Why `satisfies` over type annotation (`: Type`)?**
+
+- Preserves literal types (`'pending'` instead of `string`)
+- Better type inference for the variable
+- Catches missing or extra properties
+- No need for type assertions (`as const`)
+
+See [TypeScript Guidelines](./typescript.md#7-type-inference-and-satisfies-operator) for comprehensive `satisfies` usage patterns.
+
+#### Firestore Compatibility
+
+For types used with Firestore transactions, add an index signature for compatibility:
+
+```typescript
+/**
+ * Data structure for updating an exhibition document
+ * Includes index signature for Firestore compatibility
+ */
+export interface ExhibitionUpdateData {
+  startDate?: Timestamp
+  endDate?: Timestamp
+  hasDateChanged: boolean
+  updatedAt: Timestamp
+  [key: string]: unknown  // Required for Firestore transaction.update()
+}
+```
+
+#### Documentation
+
+Always add JSDoc comments to schemas and types:
+
+```typescript
+/**
+ * Schema for exhibition data scraped from museum websites via Apify
+ */
+export const scrapedExhibitionSchema = z.object({
+  // ...
+})
+
+/**
+ * Exhibition document structure in Firestore
+ */
+export interface ExhibitionDocument {
+  // ...
+}
+```
+
 ## Function Guidelines
 
 ### Function Size
@@ -237,9 +419,12 @@ Organize imports in the following order:
 import { Hono } from 'hono'
 import { env } from 'hono/adapter'
 
+// Schemas
+import { apifyResponseSchema, apifyFeedResponseSchema } from '../schemas/apify.schema.js'
+
 // Types
 import type { AppEnv } from '../types/env.js'
-import type { MuseumMaps } from '../types/exhibition.js'
+import type { MuseumMaps } from '../types/museum.js'
 
 // Lib
 import db from '../lib/firestore.js'
@@ -252,9 +437,6 @@ import { runActorAndGetResults } from '../services/apify.service.js'
 
 // Utils
 import { getExhibitionDocumentId } from '../utils/hash.js'
-
-// Schemas
-import { apifyResponseSchema } from '../schema.js'
 
 // Errors
 import { ConfigurationError } from '../errors/app-error.js'

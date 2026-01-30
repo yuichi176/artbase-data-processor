@@ -52,16 +52,20 @@ src/
 │   ├── apify.service.ts       # Apify actor execution
 │   ├── exhibition.service.ts  # Exhibition processing logic
 │   └── museum.service.ts      # Museum data operations
-├── types/                # TypeScript type definitions
+├── schemas/              # Zod validation schemas (runtime validation)
+│   ├── exhibition.schema.ts   # Exhibition data schemas
+│   ├── museum.schema.ts       # Museum document schemas
+│   └── apify.schema.ts        # Apify response schemas
+├── types/                # TypeScript type definitions (compile-time types)
 │   ├── env.ts            # Environment variable types
-│   └── exhibition.ts     # Domain-specific types
+│   ├── exhibition.ts     # Exhibition domain types
+│   └── museum.ts         # Museum domain types
 ├── lib/                  # External service clients
 │   ├── apify.ts          # Apify client initialization
 │   └── firestore.ts      # Firestore client initialization
-├── utils/                # Utility functions
-│   ├── date.ts           # Date comparison utilities
-│   └── hash.ts           # Document ID generation
-└── schema.ts             # Zod validation schemas
+└── utils/                # Utility functions
+    ├── date.ts           # Date comparison utilities
+    └── hash.ts           # Document ID generation
 ```
 
 ## Architectural Principles
