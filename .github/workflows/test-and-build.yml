@@ -1,0 +1,42 @@
+name: Test and Build
+
+on:
+  workflow_call:
+    inputs:
+      RUNNER:
+        type: string
+        required: true
+      NODE_VERSION:
+        type: string
+        required: true
+      PNPM_VERSION:
+        type: string
+        required: true
+
+jobs:
+  test-and-build:
+    runs-on: ${{ inputs.RUNNER }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm ${{ inputs.PNPM_VERSION }}
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ inputs.PNPM_VERSION }}
+
+      - name: Setup Node.js ${{ inputs.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run tests
+        # TODO: run test when implemented
+        run: echo "Tests would run here"
+
+      - name: Build project
+        run: pnpm build
